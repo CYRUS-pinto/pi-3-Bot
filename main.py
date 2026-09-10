@@ -1149,9 +1149,10 @@ def main():
             else:
                 rotated = pygame.transform.rotate(screen.copy(), angle)
             # Scale up to fill physical screen if canvas was downscaled.
-            # smoothscale = bilinear filtering — eliminates the pixelated/blocky look.
+            # ponytail: was smoothscale — bench on Pi3 measured 89ms for 960x540→1920x1080 (THE lag; budget is 33ms).
+            # scale() (nearest) does the exact 2x step in ~5ms. Slight edge stair-stepping at 2m viewing beats 6fps.
             if rotated.get_size() != screen.get_size():
-                pygame.transform.smoothscale(rotated, screen.get_size(), screen)
+                pygame.transform.scale(rotated, screen.get_size(), screen)
             else:
                 screen.blit(rotated, (0, 0))
         elif canvas is not screen:
