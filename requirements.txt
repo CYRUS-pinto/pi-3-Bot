@@ -1,0 +1,7 @@
+# TARS runtime deps (was: pygame only — Pi worked by luck of a hand-built env)
+pygame>=2.5,<3
+opencv-python
+numpy
+pyserial
+# Pi-only GPIO (marker keeps laptop installs clean; Pi OS usually preinstalls it)
+RPi.GPIO; platform_machine == "armv7l" or platform_machine == "aarch64"

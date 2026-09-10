@@ -1,0 +1,12 @@
+# ponytail: only runtime code is tracked — everything below regenerates or is machine-local
+__pycache__/
+*.pyc
+tars.log
+snapshot.jpg
+*.pem
+*.key
+*.tar.gz
+*.zip
+backup_checkpoint*/
+database.db*
+.DS_Store
