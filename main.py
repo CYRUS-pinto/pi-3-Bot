@@ -508,6 +508,7 @@ def main():
     # the static layer ONCE per change and only the face/PiP/clock/stars per frame.
     _strip_static = None
     _strip_static_key = None
+    _strip_static_prev = None  # ponytail: previous slide's static — reveal sweeps new over old, both hi-res
     _strip_face_key = None
     _strip_face_surf = None
     _strip_face_xy = (0, 0)
@@ -518,10 +519,12 @@ def main():
     _strip_pip_tag_key = None
 
     def _strip_reset():
-        nonlocal _strip_static, _strip_static_key, _strip_face_key, _strip_face_surf
+        nonlocal _strip_static, _strip_static_key, _strip_static_prev
+        nonlocal _strip_face_key, _strip_face_surf
         nonlocal _strip_clock_key, _strip_clock_surf, _strip_pip_tag, _strip_pip_tag_key
         _strip_static = None
         _strip_static_key = None
+        _strip_static_prev = None
         _strip_face_key = None
         _strip_face_surf = None
         _strip_clock_key = ""
@@ -1065,7 +1068,9 @@ def main():
             _sang = 270 if _rot_now == 90 else 90
             _flash_on = getattr(config, "SWIPE_ANIMATION_ENABLED", True) and (
                 0.0 <= (total_t - swipe_flash_t) < 0.50)
-            # Strip eligibility: steady state only. Anything transient/debug -> full pipeline.
+            # Strip eligibility: steady state + reveal sweep. Anything else transient/debug -> full.
+            # ponytail: reveal used to fall back to the low-res full pipeline for 0.25s per slide —
+            # every slide change visibly SNAPPED pixelated->crisp. Now the sweep itself is screen-space.
             _strip_ran = (
                 S is not None
                 and not show_diagnostics
@@ -1073,13 +1078,13 @@ def main():
                 and not (speech.is_speaking and speech.current_subtitle)
                 and not (last_gesture_banner_until > total_t and last_gesture_banner)
                 and not _flash_on
-                and (not in_event or play.event_reveal_progress >= 1.0)
             )
             if _strip_ran:
                 # ── Strip path: cached static + transformed dynamic strips ──
                 _skey = ("E" if in_event else "F", play.event_idx if in_event else -1,
                          _rot_now, canvas_w, canvas_h, _sw, _sh)
                 if _skey != _strip_static_key:
+                    _strip_static_prev = _strip_static
                     # base: bg smooth-upscaled once (flat void/vignette upscale cleanly)
                     pygame.transform.smoothscale(renderer._bg, (sc_w, sc_h), sc_canvas)
                     if in_event:
@@ -1095,6 +1100,17 @@ def main():
                         screen.blit(_rr, (0, 0))
                     _strip_static = screen.copy()
                     _strip_static_key = _skey
+                # reveal sweep in screen space: new hi-res static wipes over previous (both crisp)
+                _rev = play.event_reveal_progress if in_event else 1.0
+                if in_event and _rev < 1.0 and _strip_static_prev is not None:
+                    screen.blit(_strip_static_prev, (0, 0))
+                    _sy = int(_sh * _rev)
+                    if _sy > 0:
+                        screen.blit(_strip_static, (0, 0),
+                                    pygame.Rect(0, 0, _sw, _sy))
+                        pygame.draw.line(screen, config.E_NEUTRAL, (0, _sy), (_sw, _sy), 2)
+                        _glow = tuple(int(c * 0.35) for c in config.E_NEUTRAL)
+                        pygame.draw.line(screen, _glow, (0, max(0, _sy - 2)), (_sw, max(0, _sy - 2)), 1)
                 else:
                     screen.blit(_strip_static, (0, 0))
                 if not in_event:

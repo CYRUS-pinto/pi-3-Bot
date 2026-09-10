@@ -1494,11 +1494,12 @@ class UniversalVisionTracker:
                 self.latest_jpeg = buf.tobytes()
 
             # Prepare pre-scaled Pygame Surface if PiP is active for zero-overhead blitting
-            # ponytail: 240x180 corner box needs ~10fps, not 30 — rebuild every 3rd pass, saves 2/3 of resize+cvtColor+tobytes
+            # ponytail: 240x180 corner box needs ~10fps, not 30 — rebuild every 3rd pass, saves 2/3 of resize+cvtColor+tobytes.
+            # 320x240, not 240x180: PiP is upscaled ~3x total on the display path; 240px source was mush.
             self._pip_tick = getattr(self, "_pip_tick", 0) + 1
             if config.SHOW_CAMERA_PIP and self._pip_tick % 3 == 1:
                 try:
-                    pip_w, pip_h = 240, 180
+                    pip_w, pip_h = 320, 240
                     # ponytail: fixed-size stage — buffers live once, not per rebuild (dst= overwrites fully, no aliasing)
                     _pf = getattr(self, "_pip_frame", None)
                     if _pf is None:
