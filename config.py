@@ -178,10 +178,7 @@ LOW_POWER_AI_FPS      = 4.0     # Standby AI poll rate (slashes Pi CPU by >80%)
 LOW_POWER_RENDER_FPS  = 20      # Thermal-cooling render rate (nobody overheats, nobody notices)
 IDLE_RENDER_FPS       = 8       # ponytail: empty-room standby — log proved 20fps of an unwatched screen still climbs to 72°C. 8fps breathing, instant wake to 30 on presence.
 
-# ── Arduino Hardware Servo Interaction ───────────────────────────────────────
-ARDUINO_ENABLED       = False   # Retired: no servo hardware on this build. start() no-ops, serial never opens, thread never spawns. Flip to True if hands return.
-ARDUINO_PORT          = "AUTO"  # "AUTO" (scans /dev/ttyACM*, /dev/ttyUSB*, COM*), or explicit port
-ARDUINO_BAUD          = 115200  # Serial baud rate
+# Servo hardware retired (no arduinos/servos on this build). Revive: git checkout HEAD~ -- arduino.py arduino/
 SERVO_PAN_PIN         = 9       # Physical eye pan / head turn servo
 SERVO_TILT_PIN        = 10      # Physical eye tilt / nod servo
 SERVO_ARM_L_PIN       = 5       # Left mechanical arm servo

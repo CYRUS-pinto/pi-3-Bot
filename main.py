@@ -358,9 +358,8 @@ def main():
     vision   = UniversalVisionTracker(config.BRIDGE_UDP_PORT)
     vision.start()
 
-    from arduino import get_arduino
-    arduino  = get_arduino()
-
+    # ponytail: servo hardware retired — no arduino import, no serial scan, no thread.
+    # Revive: git checkout HEAD~ -- arduino.py arduino/ && re-add get_arduino() here.
     # Pre-render face header and bottom keyboard hint overlays
     def make_face_overlays(w_curr, h_curr, f_dict):
         is_port = (getattr(config, "SCREEN_ORIENTATION", "AUTO") == "PORTRAIT") or (
@@ -478,8 +477,6 @@ def main():
                 play.hold_manual(60.0)
 
             if cmd == "say":
-                if arduino:
-                    arduino.trigger_gesture("WAVE")
                 speech.play_cue(
                     payload.get("clip", "greeting"),
                     blink_ctrl=blink,
@@ -609,16 +606,6 @@ def main():
                     elif direction in ("down", "slides", "events"):
                         swipe_flash_dir = "down"
                     swipe_flash_t = total_t
-
-                if arduino:
-                    if direction in ("next", "right"):
-                        arduino.trigger_gesture("SWIPE_RIGHT")
-                    elif direction in ("prev", "left"):
-                        arduino.trigger_gesture("SWIPE_LEFT")
-                    elif direction in ("up", "face"):
-                        arduino.trigger_gesture("SWIPE_UP")
-                    elif direction in ("down", "slides", "events"):
-                        arduino.trigger_gesture("SWIPE_DOWN")
 
                 if play:
                     if direction in ("up", "down", "face"):
@@ -800,8 +787,6 @@ def main():
                 lp = bool(payload.get("low_power", False))
                 if lp != is_low_power:
                     is_low_power = lp
-                    if arduino:
-                        arduino.set_standby(is_low_power)
                     if is_low_power:
                         last_gesture_banner = "[STANDBY // LOW POWER // SENSORS MONITORING]"
                         last_gesture_banner_until = total_t + 2.0
@@ -810,10 +795,6 @@ def main():
                         last_gesture_banner = "[ACTIVE // HUMAN TARGET ACQUIRED]"
                         last_gesture_banner_until = total_t + 2.0
                         renderer.invalidate_full()
-
-                if active and nx is not None and ny is not None and not is_low_power:
-                    if arduino:
-                        arduino.set_gaze(float(nx) - 0.5, float(ny) - 0.5)
 
                 hud.set_target(
                     active,
@@ -1176,8 +1157,6 @@ def main():
         pygame.display.flip()
         last_draw_ms = (time.perf_counter() - t_db0) * 1000.0
 
-    if arduino:
-        arduino.stop()
     vision.stop()
     bridge.stop()
     pygame.quit()

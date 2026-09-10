@@ -3,7 +3,9 @@ $env:SSH_ASKPASS = "C:\Users\Cyrus\.gemini\antigravity-ide\brain\e7ef5b92-5eb7-4
 $env:SSH_ASKPASS_REQUIRE = "force"
 $env:DISPLAY = "dummy:0"
 
-$files = @("config.py", "vision.py", "main.py", "animation.py", "bridge.py", "hud.py", "arduino.py", "calibration.json", "calibrate_gestures.py")
+# ponytail: was a hardcoded 9-file list that silently dropped renderer/speech/dialogue/face (stale Pi bugs).
+# Now ships every tracked .py + calibration; arduino retired. bridge serial-in is dormant by default (BRIDGE_SERIAL_PORT="").
+$files = @(Get-ChildItem -Path (Get-Location) -Filter "*.py" | Select-Object -ExpandProperty Name) + @("calibration.json")
 Write-Host ">>> Deploying TARS updates to cyrus@${targetIp}:/home/cyrus/TARS/ ..." -ForegroundColor Cyan
 
 foreach ($f in $files) {
