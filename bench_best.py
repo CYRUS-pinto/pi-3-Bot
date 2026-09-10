@@ -133,6 +133,8 @@ def phase_render():
     # warmup (morph + caches settle)
     for i in range(30):
         r.draw(i * 0.033, 0.033, draw_face=True)
+    # NOTE: this block must mirror main.py's present path exactly — it IS the shipped pipeline.
+    # (An earlier revision measured smoothscale here while main.py had already moved to scale: bench lied, main didn't.)
     t_face, t_rot, t_scale, t_flip, t_all = [], [], [], [], []
     N = 120
     for i in range(N):
@@ -141,7 +143,7 @@ def phase_render():
         t1 = time.perf_counter()
         rotated = pygame.transform.rotate(canvas, 90)
         t2 = time.perf_counter()
-        pygame.transform.smoothscale(rotated, screen.get_size(), screen)
+        pygame.transform.scale(rotated, screen.get_size(), screen)
         t3 = time.perf_counter()
         pygame.display.flip()
         t4 = time.perf_counter()
