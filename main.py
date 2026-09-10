@@ -1109,7 +1109,9 @@ def main():
                     _fk = (_fr.x, _fr.y, _fr.w, _fr.h)
                     if _fresh or _fk != _strip_face_key or _strip_face_surf is None:
                         _fr2 = pygame.transform.rotate(_face._surf, _sang)
-                        _strip_face_surf = pygame.transform.scale(
+                        # ponytail: face is ORGANIC (circles, curves, glow) — bilinear suits it;
+                        # text/dots elsewhere keep nearest-exact. Only runs when face is dirty.
+                        _strip_face_surf = pygame.transform.smoothscale(
                             _fr2, (_fr2.get_width() * S, _fr2.get_height() * S))
                         _strip_face_key = _fk
                         _strip_face_xy = _strip_map_rect(
@@ -1154,7 +1156,8 @@ def main():
                         _ps.blit(_strip_pip_tag, (6, 3))
                         _ps.blit(_pip, (2, 20))
                         _pr = pygame.transform.rotate(_ps, _sang)
-                        _prs = pygame.transform.scale(
+                        # ponytail: camera video is organic — bilinear, like the face. ~1ms on this size.
+                        _prs = pygame.transform.smoothscale(
                             _pr, (_pr.get_width() * S, _pr.get_height() * S))
                         _dx, _dy, _, _ = _strip_map_rect(
                             _px0 - 2, _py0 - 20, _bw, _bh, canvas_w, canvas_h, _sang, S)
