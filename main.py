@@ -418,9 +418,38 @@ def main():
 
     face_label, face_label_x, face_label_y, face_hint, face_hint_x, face_hint_y = make_face_overlays(canvas_w, canvas_h, fonts)
 
+    # ── Static hi-res layer (crisp text) ──────────────────────────────────────
+    # ponytail: text quality lives HERE, not on the dynamic canvas. Static canvas renders at FULL
+    # portrait res, so its rotate lands EXACTLY on screen — zero upscale, zero blur. Rebuilt only on
+    # slide/phase/geometry change (~45ms once per 8s). Dynamic layer stays small+fast. Split wins both.
+    sc_w = sc_h = 0
+    sc_fonts = None
+    sc_card_mgr = None
+    sc_label = sc_hint = None
+    sc_label_x = sc_label_y = sc_hint_x = sc_hint_y = 0
+    sc_canvas = None
+
+    def _build_static_layer():
+        nonlocal sc_w, sc_h, sc_fonts, sc_card_mgr
+        nonlocal sc_label, sc_label_x, sc_label_y, sc_hint, sc_hint_x, sc_hint_y, sc_canvas
+        _srot = getattr(config, "SCREEN_ROTATION", 0)
+        if _srot in (90, 270) and w > h:
+            sc_w, sc_h = h, w  # full portrait res: rotated output == screen size, no scale step
+            sc_fonts = make_fonts(sc_w, sc_h)
+            sc_card_mgr = EventCardManager(sc_w, sc_h, sc_fonts)
+            sc_label, sc_label_x, sc_label_y, sc_hint, sc_hint_x, sc_hint_y = make_face_overlays(
+                sc_w, sc_h, sc_fonts)
+            sc_canvas = pygame.Surface((sc_w, sc_h)).convert()
+        else:
+            sc_w, sc_h = 0, 0
+            sc_fonts = sc_card_mgr = sc_canvas = None
+
+    _build_static_layer()
+
     def update_canvas_geometry():
         nonlocal canvas, canvas_w, canvas_h, fonts, face_label, face_label_x, face_label_y, face_hint, face_hint_x, face_hint_y
         _strip_reset()
+        _build_static_layer()
         current_rot = getattr(config, "SCREEN_ROTATION", 0)
         if current_rot in (90, 270) and w > h:
             _CANVAS_SCALE = 0.5  # keep integer 2x upscale (see above) — do not retune blind
@@ -1051,15 +1080,17 @@ def main():
                 _skey = ("E" if in_event else "F", play.event_idx if in_event else -1,
                          _rot_now, canvas_w, canvas_h, _sw, _sh)
                 if _skey != _strip_static_key:
-                    canvas.blit(renderer._bg, (0, 0))
+                    # base: bg smooth-upscaled once (flat void/vignette upscale cleanly)
+                    pygame.transform.smoothscale(renderer._bg, (sc_w, sc_h), sc_canvas)
                     if in_event:
-                        card_mgr.draw(canvas, play)
+                        sc_card_mgr.draw(sc_canvas, play)
                     else:
-                        canvas.blit(face_label, (face_label_x, face_label_y))
-                        canvas.blit(face_hint, (face_hint_x, face_hint_y))
-                    _rr = pygame.transform.rotate(canvas, _sang)
+                        sc_canvas.blit(sc_label, (sc_label_x, sc_label_y))
+                        sc_canvas.blit(sc_hint, (sc_hint_x, sc_hint_y))
+                    _rr = pygame.transform.rotate(sc_canvas, _sang)
                     if (_rr.get_width(), _rr.get_height()) != (_sw, _sh):
-                        pygame.transform.scale(_rr, (_sw, _sh), screen)
+                        # safety: should be exact-fit by construction; scale only if geometry lied
+                        pygame.transform.smoothscale(_rr, (_sw, _sh), screen)
                     else:
                         screen.blit(_rr, (0, 0))
                     _strip_static = screen.copy()
