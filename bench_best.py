@@ -135,13 +135,18 @@ def phase_render():
         r.draw(i * 0.033, 0.033, draw_face=True)
     # NOTE: this block must mirror main.py's present path exactly — it IS the shipped pipeline.
     # (An earlier revision measured smoothscale here while main.py had already moved to scale: bench lied, main didn't.)
+    import numpy as _np
+    from pygame import surfarray as _sa
     t_face, t_rot, t_scale, t_flip, t_all = [], [], [], [], []
     N = 120
     for i in range(N):
         t0 = time.perf_counter()
         r.draw(i * 0.033, 0.033, draw_face=True)
         t1 = time.perf_counter()
-        rotated = pygame.transform.rotate(canvas, 90)
+        _px = _sa.pixels3d(canvas)
+        _hold = _np.ascontiguousarray(_np.transpose(_px, (1, 0, 2))[:, ::-1, :])
+        del _px
+        rotated = pygame.image.frombuffer(_hold, (_hold.shape[0], _hold.shape[1]), "RGB")
         t2 = time.perf_counter()
         pygame.transform.scale(rotated, screen.get_size(), screen)
         t3 = time.perf_counter()

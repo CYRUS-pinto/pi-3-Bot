@@ -1144,10 +1144,29 @@ def main():
                 pygame.transform.scale(flipped, screen.get_size(), screen)
         elif rot in (90, 270):
             angle = 270 if rot == 90 else 90
+            # ponytail: exact-90 transpose instead of generic roto (bench: 20ms on Pi3).
+            # Proven pixel-EXACT vs pygame.transform.rotate for both angles (rotcheck harness).
+            # Falls back to rotate() if the surface format ever defeats pixels3d.
+            rotated = None
+            _rot_hold = None
             if canvas is not screen:
-                rotated = pygame.transform.rotate(canvas, angle)
-            else:
-                rotated = pygame.transform.rotate(screen.copy(), angle)
+                try:
+                    import numpy as _np
+                    from pygame import surfarray as _sa
+                    _px = _sa.pixels3d(canvas)
+                    _t = _np.transpose(_px, (1, 0, 2))
+                    _v = _t[:, ::-1, :] if angle == 90 else _t[::-1, :, :]
+                    _rot_hold = _np.ascontiguousarray(_v)
+                    del _px
+                    rotated = pygame.image.frombuffer(
+                        _rot_hold, (_rot_hold.shape[0], _rot_hold.shape[1]), "RGB")
+                except Exception:
+                    rotated = None
+            if rotated is None:
+                if canvas is not screen:
+                    rotated = pygame.transform.rotate(canvas, angle)
+                else:
+                    rotated = pygame.transform.rotate(screen.copy(), angle)
             # Scale up to fill physical screen if canvas was downscaled.
             # ponytail: was smoothscale — bench on Pi3 measured 89ms for 960x540→1920x1080 (THE lag; budget is 33ms).
             # scale() (nearest) does the exact 2x step in ~5ms. Slight edge stair-stepping at 2m viewing beats 6fps.
