@@ -327,12 +327,12 @@ def main():
     rot    = getattr(config, "SCREEN_ROTATION", 0)
     if rot in (90, 270) and w > h:
         # Render at reduced internal resolution to make pygame.transform.rotate fast.
-        # ponytail: 0.5 → 540×960 canvas; rotate ~6ms + smoothscale ~8ms ≈ 14ms total vs ~31ms at 0.667.
-        # Verified on-Pi: 0.667 could never hold 30fps (31ms > 33ms budget before ANY drawing) — that WAS the lag.
-        # Softness from 2x upscale is invisible at 2m viewing; judder is not.
-        _CANVAS_SCALE = 0.5
-        canvas_w = max(1, int(h * _CANVAS_SCALE))   # landscape h=1080 → portrait canvas_w=540
-        canvas_h = max(1, int(w * _CANVAS_SCALE))   # landscape w=1920 → portrait canvas_h=960
+        # ponytail: 0.4 → 432×768 canvas; rotate ~13ms (scales with pixels from benched 20ms @0.5).
+        # Budget: 9.7 face + 13 rotate + 6 scale + 3 flip ≈ 32ms → 30fps borderline; stable ~28fps worst case.
+        # Below 0.4 the pre-rendered card type goes soft at 2m — this is the floor, not a knob.
+        _CANVAS_SCALE = 0.4
+        canvas_w = max(1, int(h * _CANVAS_SCALE))   # landscape h=1080 → portrait canvas_w=432
+        canvas_h = max(1, int(w * _CANVAS_SCALE))   # landscape w=1920 → portrait canvas_h=768
         # Landscape canvas drawn then rotated to portrait
         canvas = pygame.Surface((canvas_w, canvas_h)).convert()
     else:
@@ -383,7 +383,7 @@ def main():
         nonlocal canvas, canvas_w, canvas_h, fonts, face_label, face_label_x, face_label_y, face_hint, face_hint_x, face_hint_y
         current_rot = getattr(config, "SCREEN_ROTATION", 0)
         if current_rot in (90, 270) and w > h:
-            _CANVAS_SCALE = 0.5
+            _CANVAS_SCALE = 0.4
             canvas_w = max(1, int(h * _CANVAS_SCALE))
             canvas_h = max(1, int(w * _CANVAS_SCALE))
             canvas = pygame.Surface((canvas_w, canvas_h)).convert()
@@ -1144,29 +1144,13 @@ def main():
                 pygame.transform.scale(flipped, screen.get_size(), screen)
         elif rot in (90, 270):
             angle = 270 if rot == 90 else 90
-            # ponytail: exact-90 transpose instead of generic roto (bench: 20ms on Pi3).
-            # Proven pixel-EXACT vs pygame.transform.rotate for both angles (rotcheck harness).
-            # Falls back to rotate() if the surface format ever defeats pixels3d.
-            rotated = None
-            _rot_hold = None
+            # ponytail: plain rotate() won. A numpy exact-transpose was proven pixel-identical headless
+            # but benched SLOWER on Pi3 (28ms vs 20ms) — the strided 2MB copy is cache-hostile on LPDDR2.
+            # Clever lost to simple; simple ships.
             if canvas is not screen:
-                try:
-                    import numpy as _np
-                    from pygame import surfarray as _sa
-                    _px = _sa.pixels3d(canvas)
-                    _t = _np.transpose(_px, (1, 0, 2))
-                    _v = _t[:, ::-1, :] if angle == 90 else _t[::-1, :, :]
-                    _rot_hold = _np.ascontiguousarray(_v)
-                    del _px
-                    rotated = pygame.image.frombuffer(
-                        _rot_hold, (_rot_hold.shape[0], _rot_hold.shape[1]), "RGB")
-                except Exception:
-                    rotated = None
-            if rotated is None:
-                if canvas is not screen:
-                    rotated = pygame.transform.rotate(canvas, angle)
-                else:
-                    rotated = pygame.transform.rotate(screen.copy(), angle)
+                rotated = pygame.transform.rotate(canvas, angle)
+            else:
+                rotated = pygame.transform.rotate(screen.copy(), angle)
             # Scale up to fill physical screen if canvas was downscaled.
             # ponytail: was smoothscale — bench on Pi3 measured 89ms for 960x540→1920x1080 (THE lag; budget is 33ms).
             # scale() (nearest) does the exact 2x step in ~5ms. Slight edge stair-stepping at 2m viewing beats 6fps.

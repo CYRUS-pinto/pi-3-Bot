@@ -127,26 +127,21 @@ def phase_render():
     size = (config.WIDTH, config.HEIGHT) if (config.WIDTH and config.HEIGHT) else (0, 0)
     screen = pygame.display.set_mode(size, flags)
     w, h = screen.get_size()
-    canvas = pygame.Surface((max(1, int(h * 0.5)), max(1, int(w * 0.5)))).convert()
+    # NOTE: canvas scale must mirror main.py's _CANVAS_SCALE — it IS the shipped pipeline.
+    # (Transpose experiment reverted: strided 2MB copy slower than roto on Pi3 memory.)
+    canvas = pygame.Surface((max(1, int(h * 0.4)), max(1, int(w * 0.4)))).convert()
     r = Renderer(canvas)
     r.face.set_emotion("HAPPY")
     # warmup (morph + caches settle)
     for i in range(30):
         r.draw(i * 0.033, 0.033, draw_face=True)
-    # NOTE: this block must mirror main.py's present path exactly — it IS the shipped pipeline.
-    # (An earlier revision measured smoothscale here while main.py had already moved to scale: bench lied, main didn't.)
-    import numpy as _np
-    from pygame import surfarray as _sa
     t_face, t_rot, t_scale, t_flip, t_all = [], [], [], [], []
     N = 120
     for i in range(N):
         t0 = time.perf_counter()
         r.draw(i * 0.033, 0.033, draw_face=True)
         t1 = time.perf_counter()
-        _px = _sa.pixels3d(canvas)
-        _hold = _np.ascontiguousarray(_np.transpose(_px, (1, 0, 2))[:, ::-1, :])
-        del _px
-        rotated = pygame.image.frombuffer(_hold, (_hold.shape[0], _hold.shape[1]), "RGB")
+        rotated = pygame.transform.rotate(canvas, 90)
         t2 = time.perf_counter()
         pygame.transform.scale(rotated, screen.get_size(), screen)
         t3 = time.perf_counter()
