@@ -433,7 +433,13 @@ def main():
         frame_no += 1
         if frame_no % 45 == 0:  # ponytail: 1.5s cadence — thermal moves slowly, per-frame metrics read would be pure overhead
             try:
-                cooling_active = bool(_get_vm().get("cooling", False))
+                # Hysteresis band: enter cooling at 60 (vision flag), exit only below 55.
+                # Without this the governor flaps 30↔20fps at the boundary — that oscillation IS judder.
+                _vm = _get_vm()
+                if bool(_vm.get("cooling", False)):
+                    cooling_active = True
+                elif (_vm.get("temp_c", 99.0) or 99.0) < 55.0:
+                    cooling_active = False
             except Exception:
                 pass
         if (is_low_power and getattr(config, "LOW_POWER_ENABLED", True)) or cooling_active:
