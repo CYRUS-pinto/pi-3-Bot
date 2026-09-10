@@ -1079,6 +1079,7 @@ def main():
                 and not (last_gesture_banner_until > total_t and last_gesture_banner)
                 and not _flash_on
             )
+            # (STRIPDBG served its verdict 2026-09-11: rot=0 user-set for landscape tests. Removed.)
             if _strip_ran:
                 # ── Strip path: cached static + transformed dynamic strips ──
                 _skey = ("E" if in_event else "F", play.event_idx if in_event else -1,
