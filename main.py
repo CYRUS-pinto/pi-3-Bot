@@ -327,13 +327,14 @@ def main():
     rot    = getattr(config, "SCREEN_ROTATION", 0)
     if rot in (90, 270) and w > h:
         # Render at reduced internal resolution to make pygame.transform.rotate fast.
-        # 540x960 rotates in ~6ms vs 75ms for 1080x1920 on Raspberry Pi 3.
-        # The rotated 960x540 surface is then scaled up to fill the physical 1080x1920 screen.
-        _CANVAS_SCALE = 0.667   # 67% → 720×1280; rotate costs ~19ms vs 75ms at full res, smoothscale hides any softness
-        canvas_w = max(1, int(h * _CANVAS_SCALE))   # landscape h=1080 → portrait canvas_w=720
-        canvas_h = max(1, int(w * _CANVAS_SCALE))   # landscape w=1920 → portrait canvas_h=1280
+        # ponytail: 0.5 → 540×960 canvas; rotate ~6ms + smoothscale ~8ms ≈ 14ms total vs ~31ms at 0.667.
+        # Verified on-Pi: 0.667 could never hold 30fps (31ms > 33ms budget before ANY drawing) — that WAS the lag.
+        # Softness from 2x upscale is invisible at 2m viewing; judder is not.
+        _CANVAS_SCALE = 0.5
+        canvas_w = max(1, int(h * _CANVAS_SCALE))   # landscape h=1080 → portrait canvas_w=540
+        canvas_h = max(1, int(w * _CANVAS_SCALE))   # landscape w=1920 → portrait canvas_h=960
         # Landscape canvas drawn then rotated to portrait
-        canvas = pygame.Surface((canvas_w, canvas_h)).convert()  # ponytail: .convert() was missing — every blit/rotate paid unconverted cost
+        canvas = pygame.Surface((canvas_w, canvas_h)).convert()
     else:
         canvas_w, canvas_h = w, h
         canvas = screen
@@ -382,7 +383,7 @@ def main():
         nonlocal canvas, canvas_w, canvas_h, fonts, face_label, face_label_x, face_label_y, face_hint, face_hint_x, face_hint_y
         current_rot = getattr(config, "SCREEN_ROTATION", 0)
         if current_rot in (90, 270) and w > h:
-            _CANVAS_SCALE = 0.667
+            _CANVAS_SCALE = 0.5
             canvas_w = max(1, int(h * _CANVAS_SCALE))
             canvas_h = max(1, int(w * _CANVAS_SCALE))
             canvas = pygame.Surface((canvas_w, canvas_h)).convert()

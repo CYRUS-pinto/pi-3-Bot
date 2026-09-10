@@ -147,7 +147,7 @@ ACTIVE_SLIDE_INDEX    = 0        # Current slide index (0 to 5)
 SHOW_DIAGNOSTICS      = False    # Diagnostic performance graph (blue box at bottom-right)
 SHOW_GESTURE_BANNER   = True     # ponytail: non-tech users need the green SWIPE feedback or they assume the bot is dead
 AI_TARGET_FPS         = 22.0     # Target AI face tracking FPS (prevents CPU thermal throttling)
-THERMAL_THROTTLE_LIMIT_C = 70.0  # Pi CPU temperature threshold for dynamic thermal cooling
+THERMAL_THROTTLE_LIMIT_C = 60.0  # ponytail: was 70 — Pi already reports 0x80008 (firmware soft-throttling, CPU capped UNDER us) at 69°C. Govern at 60, before firmware caps the CPU and the lag death-spiral starts
 EVENT_DISPLAY_TIME    = 8.0      # Seconds each event slide is displayed during auto-cycle
 AUTO_CYCLE_ENABLED    = True     # True: slides advance automatically, False: manual hold
 GESTURE_MODE          = "4_WAY"  # "4_WAY" (L/R: slides, UP: face, DN: slides) or "HORIZONTAL_SWIPE"
@@ -178,7 +178,7 @@ LOW_POWER_AI_FPS      = 4.0     # Standby AI poll rate (slashes Pi CPU by >80%)
 LOW_POWER_RENDER_FPS  = 20      # Standby render rate (relaxed breathing pulse)
 
 # ── Arduino Hardware Servo Interaction ───────────────────────────────────────
-ARDUINO_ENABLED       = True    # Serial communication with Arduino for physical robot hands/servos
+ARDUINO_ENABLED       = False   # Retired: no servo hardware on this build. start() no-ops, serial never opens, thread never spawns. Flip to True if hands return.
 ARDUINO_PORT          = "AUTO"  # "AUTO" (scans /dev/ttyACM*, /dev/ttyUSB*, COM*), or explicit port
 ARDUINO_BAUD          = 115200  # Serial baud rate
 SERVO_PAN_PIN         = 9       # Physical eye pan / head turn servo
