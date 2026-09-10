@@ -1153,12 +1153,16 @@ def main():
                     _strip_clock_key = _cs
                 if _strip_clock_surf is not None:
                     screen.blit(_strip_clock_surf, _strip_clock_xy)
-                # PiP strip (bounded 244x202 region; re-composed per frame, ~1ms)
-                if config.SHOW_CAMERA_PIP:
+                # PiP strip (FACE only; small corner — photos proved full-size ate half the display)
+                if config.SHOW_CAMERA_PIP and not in_event:
                     from vision import get_latest_pip_surface
                     _pip = get_latest_pip_surface()
                     if _pip is not None:
                         _pw, _ph = _pip.get_width(), _pip.get_height()
+                        _dw = min(_pw, max(96, int(canvas_w * 0.34)))
+                        if _dw != _pw:
+                            _pip = pygame.transform.smoothscale(_pip, (_dw, max(1, int(_dw * _ph / _pw))))
+                            _pw, _ph = _pip.get_width(), _pip.get_height()
                         _px0 = canvas_w - _pw - max(16, int(canvas_w * 0.02))
                         _py0 = canvas_h - _ph - max(16, int(canvas_h * 0.03))
                         if _strip_pip_tag_key != id(fonts["xs"]):
@@ -1257,11 +1261,18 @@ def main():
 
         # ── Picture-in-Picture (Live Optical Recon Feed on TV) ───────────────
         # ponytail: strip path already drew PiP above — this full-pipeline block must not double-draw.
-        if config.SHOW_CAMERA_PIP and not _strip_ran:
+        # ponytail: PiP stays a SMALL corner in FACE phase and hides during EVENT — slides own the screen.
+        # (Photos proved a 320px PiP on a 360px canvas ate half the display and covered the face.)
+        _event_now = (phase != "BOOT" and play is not None and play.phase == "EVENT")
+        if config.SHOW_CAMERA_PIP and not _strip_ran and not _event_now:
             from vision import get_latest_pip_surface
             pip_surf = get_latest_pip_surface()
             if pip_surf:
                 pw, ph = pip_surf.get_width(), pip_surf.get_height()
+                _dw = min(pw, max(96, int(canvas_w * 0.34)))
+                if _dw != pw:
+                    pip_surf = pygame.transform.smoothscale(pip_surf, (_dw, max(1, int(_dw * ph / pw))))
+                    pw, ph = pip_surf.get_width(), pip_surf.get_height()
                 px = canvas_w - pw - max(16, int(canvas_w * 0.02))
                 py = canvas_h - ph - max(16, int(canvas_h * 0.03))
                 # High-tech border and badge
