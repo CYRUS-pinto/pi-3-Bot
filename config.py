@@ -175,7 +175,8 @@ CAMERA_ROTATION       = 0
 LOW_POWER_ENABLED     = True    # Drop AI rate and dim face when no one is around
 LOW_POWER_TIMEOUT     = 8.0     # Seconds of no face/spectator detected before sleep
 LOW_POWER_AI_FPS      = 4.0     # Standby AI poll rate (slashes Pi CPU by >80%)
-LOW_POWER_RENDER_FPS  = 20      # Standby render rate (relaxed breathing pulse)
+LOW_POWER_RENDER_FPS  = 20      # Thermal-cooling render rate (nobody overheats, nobody notices)
+IDLE_RENDER_FPS       = 8       # ponytail: empty-room standby — log proved 20fps of an unwatched screen still climbs to 72°C. 8fps breathing, instant wake to 30 on presence.
 
 # ── Arduino Hardware Servo Interaction ───────────────────────────────────────
 ARDUINO_ENABLED       = False   # Retired: no servo hardware on this build. start() no-ops, serial never opens, thread never spawns. Flip to True if hands return.

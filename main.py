@@ -405,6 +405,8 @@ def main():
     # where a 10ms pause hides inside the reveal sweep. Worst case fallback: every ~60s.
     clock   = pygame.time.Clock()
     total_t = 0.0
+    last_draw_ms = 0.0  # ponytail: actual draw+present cost. recent_ms/dt includes tick() idle wait —
+    # it reads 50.0ms at a 20fps cap and lies about draw cost. Heartbeat reports this one.
     phase   = "BOOT"
     cooling_active = False  # ponytail: render loop previously ignored thermal state — hottest thread ran full speed while boxed
     frame_no = 0
@@ -446,7 +448,9 @@ def main():
                     cooling_active = False
             except Exception:
                 pass
-        if (is_low_power and getattr(config, "LOW_POWER_ENABLED", True)) or cooling_active:
+        if is_low_power and getattr(config, "LOW_POWER_ENABLED", True):
+            fps_target = getattr(config, "IDLE_RENDER_FPS", 8)  # empty room: sip power, wake instantly
+        elif cooling_active:
             fps_target = getattr(config, "LOW_POWER_RENDER_FPS", 20)
         else:
             fps_target = config.TARGET_FPS
@@ -970,6 +974,7 @@ def main():
                     _gc.collect()  # ~60s fallback so long FACE stares never accumulate cycles
 
         # ── Draw ─────────────────────────────────────────────────────────────
+        t_db0 = time.perf_counter()
         if phase == "BOOT":
             renderer.draw(total_t, dt, draw_face=False)
             boot.draw(canvas, fonts["lg"], fonts["sm"])
@@ -1000,7 +1005,7 @@ def main():
             try:
                 _hb = _get_vm()
                 config.tlog("HEARTBEAT",
-                            f"render_avg={sum(recent_ms)/len(recent_ms):.1f}ms fps_target={fps_target} "
+                            f"draw={last_draw_ms:.1f}ms pace={sum(recent_ms)/len(recent_ms):.1f}ms fps_target={fps_target} "
                             f"cpu={_hb.get('temp_c', -1):.1f}C cooling={_hb.get('cooling', '?')} "
                             f"ai_fps={_hb.get('ai_fps', -1):.1f} grab={_hb.get('grab_ms', -1):.0f}ms "
                             f"phase={phase}/{getattr(play, 'phase', '-') if play else '-'}")
@@ -1169,6 +1174,7 @@ def main():
             screen.blit(canvas, (0, 0))
 
         pygame.display.flip()
+        last_draw_ms = (time.perf_counter() - t_db0) * 1000.0
 
     if arduino:
         arduino.stop()

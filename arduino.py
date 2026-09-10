@@ -217,6 +217,8 @@ class ArduinoController:
         if self.is_standby == standby:
             return
         self.is_standby = standby
+        if not getattr(config, "ARDUINO_ENABLED", True):
+            return  # retired hardware: silent — no serial, no log spam, state still tracked
         if standby:
             print("[Arduino] Entering Low-Power Servo Standby (Servos Parked)", flush=True)
             try:
