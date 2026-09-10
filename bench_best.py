@@ -128,8 +128,7 @@ def phase_render():
     screen = pygame.display.set_mode(size, flags)
     w, h = screen.get_size()
     # NOTE: canvas scale must mirror main.py's _CANVAS_SCALE — it IS the shipped pipeline.
-    # (Transpose experiment reverted: strided 2MB copy slower than roto on Pi3 memory.)
-    canvas = pygame.Surface((max(1, int(h * 0.4)), max(1, int(w * 0.4)))).convert()
+    canvas = pygame.Surface((max(1, int(h * 0.5)), max(1, int(w * 0.5)))).convert()
     r = Renderer(canvas)
     r.face.set_emotion("HAPPY")
     # warmup (morph + caches settle)

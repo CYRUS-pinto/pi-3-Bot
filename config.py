@@ -7,11 +7,18 @@ def tlog(tag: str, msg: str):
     now = time.time()
     ms = int((now % 1) * 1000)
     t_str = time.strftime("%H:%M:%S", time.localtime(now)) + f".{ms:03d}"
-    print(f"[{t_str}] [{tag}] {msg}", flush=True)
+    try:
+        print(f"[{t_str}] [{tag}] {msg}", flush=True)
+    except UnicodeEncodeError:
+        # ponytail: Windows consoles (cp1252) choke on →/° glyphs and would CRASH the bot mid-frame.
+        print(f"[{t_str}] [{tag}] {msg}".encode("ascii", "replace").decode(), flush=True)
 
 
-WIDTH  = 0
-HEIGHT = 0
+# ponytail: 720p, not 1080p. Benched on-Pi: SDL kmsdrm flip costs ~47ms/frame at 1080p
+# (8.3MB shadow copy per present) vs ~19ms at 720p — the flip alone made 30fps impossible.
+# The TV hardware-upscales to 1080p in silicon for free. 0 = follow desktop mode (legacy behavior).
+WIDTH  = 1280
+HEIGHT = 720
 TARGET_FPS   = 30   # ponytail: 30fps cap — render bench is 11-13ms; 60fps doubles heat for frames the 8.7fps camera feed can't fill
 WINDOW_TITLE = "TARS — Live Display"
 FULLSCREEN       = True

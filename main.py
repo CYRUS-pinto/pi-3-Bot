@@ -12,6 +12,7 @@ Key Enhancements:
 """
 
 from __future__ import annotations
+import math
 import os
 import sys
 import time
@@ -69,6 +70,44 @@ def _render_wrapped_text(surface: pygame.Surface, font: pygame.font.Font,
         surface.blit(font.render(line, True, color), (x, y))
         y += font.get_height() + 4
     return y
+
+
+# ── Strip-path mapping (two-layer present) ──────────────────────────────────────
+# Integer-exact coordinate maps for the 90°/270° + integer-scale present path.
+# Proven pixel-identical vs pygame.transform.rotate+scale (rotcheck harness, both angles).
+# Rule: strip path runs ONLY at integer scale S; anything else falls back to full pipeline.
+
+def _strip_scale_for(rot: int, cw: int, ch: int, sw: int, sh: int) -> int | None:
+    """Integer upscale factor for the rotated canvas, or None (=> full pipeline)."""
+    if rot in (90, 270):
+        rw, rh = ch, cw
+    elif rot in (0, 180):
+        rw, rh = cw, ch
+    else:
+        return None
+    if rw <= 0 or rh <= 0 or sw % rw != 0 or sh % rh != 0:
+        return None
+    sx, sy = sw // rw, sh // rh
+    return sx if sx == sy else None
+
+
+def _strip_map_point(x: int, y: int, cw: int, ch: int, angle: int, s: int) -> tuple[int, int]:
+    """Canvas pixel -> screen pixel through exact-90 rotation + integer scale."""
+    if angle == 90:
+        return (s * y, s * (cw - 1 - x))
+    return (s * (ch - 1 - y), s * x)  # angle == 270
+
+
+def _strip_map_rect(x0: int, y0: int, w0: int, h0: int,
+                    cw: int, ch: int, angle: int, s: int) -> tuple[int, int, int, int]:
+    """Canvas rect -> screen rect through exact-90 rotation + integer scale. All ints.
+    Derived from the proven transpose identities (angle90: R[i,j]=C[Wc-1-j,i];
+    angle270: R[i,j]=C[j,Hc-1-i]). Pixel-equality harness covers both."""
+    if angle == 90:
+        rx, ry, rw, rh = y0, cw - x0 - w0, h0, w0
+    else:  # angle == 270
+        rx, ry, rw, rh = ch - y0 - h0, x0, h0, w0
+    return (rx * s, ry * s, rw * s, rh * s)
 
 
 # ── Pre-rendered Event Cards ──────────────────────────────────────────────────
@@ -327,12 +366,13 @@ def main():
     rot    = getattr(config, "SCREEN_ROTATION", 0)
     if rot in (90, 270) and w > h:
         # Render at reduced internal resolution to make pygame.transform.rotate fast.
-        # ponytail: 0.4 → 432×768 canvas; rotate ~13ms (scales with pixels from benched 20ms @0.5).
-        # Budget: 9.7 face + 13 rotate + 6 scale + 3 flip ≈ 32ms → 30fps borderline; stable ~28fps worst case.
-        # Below 0.4 the pre-rendered card type goes soft at 2m — this is the floor, not a knob.
-        _CANVAS_SCALE = 0.4
-        canvas_w = max(1, int(h * _CANVAS_SCALE))   # landscape h=1080 → portrait canvas_w=432
-        canvas_h = max(1, int(w * _CANVAS_SCALE))   # landscape w=1920 → portrait canvas_h=768
+        # ponytail: 0.5 → canvas at half panel res, rotated, EXACT 2x integer upscale to panel.
+        # 0.4 was tried and looked bad: 2.5x non-integer nearest gives uneven pixels (doubled AND tripled
+        # side by side) — jagged text shimmer. Integer 2x doubles every pixel cleanly.
+        # Rule: upscale ratio must stay integer. Panel is 720p (flip is 19ms there vs 47ms at 1080p).
+        _CANVAS_SCALE = 0.5
+        canvas_w = max(1, int(h * _CANVAS_SCALE))
+        canvas_h = max(1, int(w * _CANVAS_SCALE))
         # Landscape canvas drawn then rotated to portrait
         canvas = pygame.Surface((canvas_w, canvas_h)).convert()
     else:
@@ -380,9 +420,10 @@ def main():
 
     def update_canvas_geometry():
         nonlocal canvas, canvas_w, canvas_h, fonts, face_label, face_label_x, face_label_y, face_hint, face_hint_x, face_hint_y
+        _strip_reset()
         current_rot = getattr(config, "SCREEN_ROTATION", 0)
         if current_rot in (90, 270) and w > h:
-            _CANVAS_SCALE = 0.4
+            _CANVAS_SCALE = 0.5  # keep integer 2x upscale (see above) — do not retune blind
             canvas_w = max(1, int(h * _CANVAS_SCALE))
             canvas_h = max(1, int(w * _CANVAS_SCALE))
             canvas = pygame.Surface((canvas_w, canvas_h)).convert()
@@ -432,6 +473,32 @@ def main():
         if px_h not in _flash_h_surfs or _flash_h_surfs[px_h].get_width() != px_w:
             _flash_h_surfs[px_h] = pygame.Surface((px_w, max(1, px_h)), pygame.SRCALPHA)
         return _flash_h_surfs[px_h]
+
+    # ── Two-layer present state (strip path: static cache + dynamic strips) ──
+    # Full pipeline re-transforms 2M static pixels every frame. Strip path rotates+scales
+    # the static layer ONCE per change and only the face/PiP/clock/stars per frame.
+    _strip_static = None
+    _strip_static_key = None
+    _strip_face_key = None
+    _strip_face_surf = None
+    _strip_face_xy = (0, 0)
+    _strip_clock_key = ""
+    _strip_clock_surf = None
+    _strip_clock_xy = (0, 0)
+    _strip_pip_tag = None
+    _strip_pip_tag_key = None
+
+    def _strip_reset():
+        nonlocal _strip_static, _strip_static_key, _strip_face_key, _strip_face_surf
+        nonlocal _strip_clock_key, _strip_clock_surf, _strip_pip_tag, _strip_pip_tag_key
+        _strip_static = None
+        _strip_static_key = None
+        _strip_face_key = None
+        _strip_face_surf = None
+        _strip_clock_key = ""
+        _strip_clock_surf = None
+        _strip_pip_tag = None
+        _strip_pip_tag_key = None
 
     running = True
     while running:
@@ -956,25 +1023,127 @@ def main():
 
         # ── Draw ─────────────────────────────────────────────────────────────
         t_db0 = time.perf_counter()
+        _strip_ran = False
         if phase == "BOOT":
             renderer.draw(total_t, dt, draw_face=False)
             boot.draw(canvas, fonts["lg"], fonts["sm"])
         else:
             in_event = (play.phase == "EVENT")
-            # Draw background and stars (face drawn only during FACE phase)
-            renderer.draw(total_t, dt, draw_face=not in_event)
-
-            if not in_event:
-                canvas.blit(face_label, (face_label_x, face_label_y))
-                canvas.blit(face_hint,  (face_hint_x,  face_hint_y))
-                # Draw optical target acquisition HUD during face mode
-                hud.draw(canvas, total_t)
+            _rot_now = getattr(config, "SCREEN_ROTATION", 0)
+            _sw, _sh = screen.get_size()
+            S = _strip_scale_for(_rot_now, canvas_w, canvas_h, _sw, _sh) \
+                if (canvas is not screen and _rot_now in (90, 270)) else None
+            _sang = 270 if _rot_now == 90 else 90
+            _flash_on = getattr(config, "SWIPE_ANIMATION_ENABLED", True) and (
+                0.0 <= (total_t - swipe_flash_t) < 0.50)
+            # Strip eligibility: steady state only. Anything transient/debug -> full pipeline.
+            _strip_ran = (
+                S is not None
+                and not show_diagnostics
+                and not getattr(config, "HUD_ENABLED", True)
+                and not (speech.is_speaking and speech.current_subtitle)
+                and not (last_gesture_banner_until > total_t and last_gesture_banner)
+                and not _flash_on
+                and (not in_event or play.event_reveal_progress >= 1.0)
+            )
+            if _strip_ran:
+                # ── Strip path: cached static + transformed dynamic strips ──
+                _skey = ("E" if in_event else "F", play.event_idx if in_event else -1,
+                         _rot_now, canvas_w, canvas_h, _sw, _sh)
+                if _skey != _strip_static_key:
+                    canvas.blit(renderer._bg, (0, 0))
+                    if in_event:
+                        card_mgr.draw(canvas, play)
+                    else:
+                        canvas.blit(face_label, (face_label_x, face_label_y))
+                        canvas.blit(face_hint, (face_hint_x, face_hint_y))
+                    _rr = pygame.transform.rotate(canvas, _sang)
+                    if (_rr.get_width(), _rr.get_height()) != (_sw, _sh):
+                        pygame.transform.scale(_rr, (_sw, _sh), screen)
+                    else:
+                        screen.blit(_rr, (0, 0))
+                    _strip_static = screen.copy()
+                    _strip_static_key = _skey
+                else:
+                    screen.blit(_strip_static, (0, 0))
+                if not in_event:
+                    # face strip (update() already ran above; drive rebuild state only)
+                    _face = renderer.face
+                    if _face._geom is None:
+                        _face._compute_geom()
+                    _fresh = bool(_face._dirty)
+                    if _fresh:
+                        _face._rebuild()
+                    _fr = _face._srect
+                    _fk = (_fr.x, _fr.y, _fr.w, _fr.h)
+                    if _fresh or _fk != _strip_face_key or _strip_face_surf is None:
+                        _fr2 = pygame.transform.rotate(_face._surf, _sang)
+                        _strip_face_surf = pygame.transform.scale(
+                            _fr2, (_fr2.get_width() * S, _fr2.get_height() * S))
+                        _strip_face_key = _fk
+                        _strip_face_xy = _strip_map_rect(
+                            _fr.x, _fr.y, _fr.w, _fr.h, canvas_w, canvas_h, _sang, S)[:2]
+                    screen.blit(_strip_face_surf, _strip_face_xy)
+                # stars in screen space (2x2 block == what integer scale makes of a canvas dot)
+                for _stx, _sty, _ph, _per in renderer._stars:
+                    _frac = 0.5 + 0.5 * math.sin(2 * math.pi * total_t / _per + _ph)
+                    _vv = int(40 + _frac * 130)
+                    _dxx, _dyy = _strip_map_point(_stx, _sty, canvas_w, canvas_h, _sang, S)
+                    screen.fill((_vv, _vv, _vv), (_dxx, _dyy, S, S))
+                # clock strip (same font object => identical raster; re-transformed 1/sec)
+                _cs = time.strftime("%H:%M:%S")
+                if _cs != _strip_clock_key:
+                    _cs0 = renderer._hud_font_md.render(_cs, True, config.MUTED)
+                    _cr = pygame.transform.rotate(_cs0, _sang)
+                    _strip_clock_surf = pygame.transform.scale(
+                        _cr, (_cr.get_width() * S, _cr.get_height() * S))
+                    _strip_clock_xy = _strip_map_rect(
+                        renderer._bar_pad_x, renderer._bar_pad_y,
+                        _cs0.get_width(), _cs0.get_height(),
+                        canvas_w, canvas_h, _sang, S)[:2]
+                    _strip_clock_key = _cs
+                if _strip_clock_surf is not None:
+                    screen.blit(_strip_clock_surf, _strip_clock_xy)
+                # PiP strip (bounded 244x202 region; re-composed per frame, ~1ms)
+                if config.SHOW_CAMERA_PIP:
+                    from vision import get_latest_pip_surface
+                    _pip = get_latest_pip_surface()
+                    if _pip is not None:
+                        _pw, _ph = _pip.get_width(), _pip.get_height()
+                        _px0 = canvas_w - _pw - max(16, int(canvas_w * 0.02))
+                        _py0 = canvas_h - _ph - max(16, int(canvas_h * 0.03))
+                        if _strip_pip_tag_key != id(fonts["xs"]):
+                            _strip_pip_tag = fonts["xs"].render(
+                                "LIVE OPTICAL RECON [PiP]", True, (56, 235, 145))
+                            _strip_pip_tag_key = id(fonts["xs"])
+                        _bw, _bh = _pw + 4, _ph + 22
+                        _ps = pygame.Surface((_bw, _bh), pygame.SRCALPHA)
+                        _ps.fill((10, 14, 20, 255))
+                        pygame.draw.rect(_ps, (56, 235, 145), (0, 0, _bw, _bh), width=1, border_radius=6)
+                        _ps.blit(_strip_pip_tag, (6, 3))
+                        _ps.blit(_pip, (2, 20))
+                        _pr = pygame.transform.rotate(_ps, _sang)
+                        _prs = pygame.transform.scale(
+                            _pr, (_pr.get_width() * S, _pr.get_height() * S))
+                        _dx, _dy, _, _ = _strip_map_rect(
+                            _px0 - 2, _py0 - 20, _bw, _bh, canvas_w, canvas_h, _sang, S)
+                        screen.blit(_prs, (_dx, _dy))
             else:
-                card_mgr.draw(canvas, play)
+                # ── Full pipeline (transients, debug, reveal, HUD) ──
+                # Draw background and stars (face drawn only during FACE phase)
+                renderer.draw(total_t, dt, draw_face=not in_event)
 
-            # Draw sci-fi dialogue subtitle capsule when speaking
-            if speech.is_speaking and speech.current_subtitle:
-                draw_speech_subtitles(canvas, speech.current_subtitle, fonts["sm"], renderer.face.active_color, canvas_w, canvas_h)
+                if not in_event:
+                    canvas.blit(face_label, (face_label_x, face_label_y))
+                    canvas.blit(face_hint, (face_hint_x, face_hint_y))
+                    # Draw optical target acquisition HUD during face mode
+                    hud.draw(canvas, total_t)
+                else:
+                    card_mgr.draw(canvas, play)
+
+                # Draw sci-fi dialogue subtitle capsule when speaking
+                if speech.is_speaking and speech.current_subtitle:
+                    draw_speech_subtitles(canvas, speech.current_subtitle, fonts["sm"], renderer.face.active_color, canvas_w, canvas_h)
 
         # ── Performance Telemetry HUD Graph (Toggle with D) ───────────────────
         recent_ms.append(dt * 1000.0)
@@ -986,7 +1155,7 @@ def main():
             try:
                 _hb = _get_vm()
                 config.tlog("HEARTBEAT",
-                            f"draw={last_draw_ms:.1f}ms pace={sum(recent_ms)/len(recent_ms):.1f}ms fps_target={fps_target} "
+                            f"draw={last_draw_ms:.1f}ms path={'strip' if _strip_ran else 'full'} pace={sum(recent_ms)/len(recent_ms):.1f}ms fps_target={fps_target} "
                             f"cpu={_hb.get('temp_c', -1):.1f}C cooling={_hb.get('cooling', '?')} "
                             f"ai_fps={_hb.get('ai_fps', -1):.1f} grab={_hb.get('grab_ms', -1):.0f}ms "
                             f"phase={phase}/{getattr(play, 'phase', '-') if play else '-'}")
@@ -1037,7 +1206,8 @@ def main():
             canvas.blit(fonts["xs"].render(track_str, True, config.E_EXCITED if vm.get('hand_active') else config.E_NEUTRAL), (gx + 10, gy + 72))
 
         # ── Picture-in-Picture (Live Optical Recon Feed on TV) ───────────────
-        if config.SHOW_CAMERA_PIP:
+        # ponytail: strip path already drew PiP above — this full-pipeline block must not double-draw.
+        if config.SHOW_CAMERA_PIP and not _strip_ran:
             from vision import get_latest_pip_surface
             pip_surf = get_latest_pip_surface()
             if pip_surf:
@@ -1129,7 +1299,9 @@ def main():
         # rotate the small canvas then scale-blit to fill the physical screen.
         # This is dramatically faster than rotating a full-resolution surface.
         rot = getattr(config, "SCREEN_ROTATION", 0)
-        if rot == 180:
+        if _strip_ran:
+            pygame.display.flip()  # strips already composited directly on screen
+        elif rot == 180:
             flipped = pygame.transform.flip(canvas, True, True)
             if flipped.get_size() == screen.get_size():
                 screen.blit(flipped, (0, 0))
@@ -1154,7 +1326,8 @@ def main():
         elif canvas is not screen:
             screen.blit(canvas, (0, 0))
 
-        pygame.display.flip()
+        if not _strip_ran:
+            pygame.display.flip()
         last_draw_ms = (time.perf_counter() - t_db0) * 1000.0
 
     vision.stop()
