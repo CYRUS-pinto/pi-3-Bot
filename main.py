@@ -399,6 +399,10 @@ def main():
         renderer.invalidate_full()
 
     from vision import get_vision_metrics as _get_vm  # ponytail: cached import — thermal governor reads cooling without per-frame cost
+    import gc as _gc
+    _gc.disable()  # ponytail: cyclic GC pauses are frame-time landmines (~5-20ms hitches on Pi3).
+    # Refcounting still frees everything promptly; full collects happen below at slide transitions,
+    # where a 10ms pause hides inside the reveal sweep. Worst case fallback: every ~60s.
     clock   = pygame.time.Clock()
     total_t = 0.0
     phase   = "BOOT"
@@ -961,6 +965,9 @@ def main():
                 play.update(dt)
                 if play.phase != old_play_phase:
                     renderer.invalidate_full()
+                    _gc.collect()  # hidden inside the transition; keeps cyclic trash at zero between slides
+                elif frame_no % 1800 == 0:
+                    _gc.collect()  # ~60s fallback so long FACE stares never accumulate cycles
 
         # ── Draw ─────────────────────────────────────────────────────────────
         if phase == "BOOT":
