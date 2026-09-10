@@ -981,6 +981,18 @@ def main():
         recent_ms.append(dt * 1000.0)
         if len(recent_ms) > 60:
             recent_ms.pop(0)
+        # ponytail: 10s heartbeat to tars.log — the only honest lag meter on a headless box.
+        # Read it with: tail -f ~/TARS/tars.log | grep HEARTBEAT
+        if frame_no % 300 == 0 and len(recent_ms) > 10:
+            try:
+                _hb = _get_vm()
+                config.tlog("HEARTBEAT",
+                            f"render_avg={sum(recent_ms)/len(recent_ms):.1f}ms fps_target={fps_target} "
+                            f"cpu={_hb.get('temp_c', -1):.1f}C cooling={_hb.get('cooling', '?')} "
+                            f"ai_fps={_hb.get('ai_fps', -1):.1f} grab={_hb.get('grab_ms', -1):.0f}ms "
+                            f"phase={phase}/{getattr(play, 'phase', '-') if play else '-'}")
+            except Exception:
+                pass
 
         if show_diagnostics:
             gw, gh = max(280, int(canvas_w * 0.32)), max(106, int(canvas_h * 0.17))

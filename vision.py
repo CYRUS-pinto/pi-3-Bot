@@ -1292,12 +1292,13 @@ class UniversalVisionTracker:
                 stream_w = 480
                 stream_h = int(stream_w * (fh / fw))
                 stream_h = stream_h if stream_h % 2 == 0 else stream_h + 1
-                # ponytail: NEAREST ~1ms vs LINEAR ~3.5ms here — annotations are lines/text, nothing soft to preserve.
+                # LINEAR: NEAREST shimmered on real-world edges (window blinds, fan blades) — visible as crawling
+                # lines on the display PiP. 2.5ms is worth it; PiP stage below stays NEAREST (already soft at 240px).
                 # Reused output buffer — was a fresh 480xHx3 alloc every stream frame (~30/s).
                 _ab = getattr(self, "_annot_buf", None)
                 if _ab is None or _ab.shape != (stream_h, stream_w, 3):
                     _ab = self._annot_buf = np.empty((stream_h, stream_w, 3), dtype=np.uint8)
-                annotated = cv2.resize(frame, (stream_w, stream_h), dst=_ab, interpolation=cv2.INTER_NEAREST)
+                annotated = cv2.resize(frame, (stream_w, stream_h), dst=_ab, interpolation=cv2.INTER_LINEAR)
                 # Mirror BEFORE any text/annotations — so text stays readable (not flipped)
                 if getattr(config, 'MIRROR_CAMERA_X', False):
                     annotated = cv2.flip(annotated, 1)
