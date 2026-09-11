@@ -268,15 +268,15 @@ def load_calibration():
             GESTURE_MODE = str(data.get("gesture_mode", GESTURE_MODE))
             GESTURE_WALK_LOCKOUT_SPEED = float(data.get("gesture_walk_lockout_speed", GESTURE_WALK_LOCKOUT_SPEED))
             GESTURE_WALK_DEBOUNCE_SEC = float(data.get("gesture_walk_debounce_sec", GESTURE_WALK_DEBOUNCE_SEC))
-            FACE_CX_RATIO = min(0.9, max(0.1, float(data.get("face_cx", FACE_CX_RATIO if FACE_CX_RATIO is not None else 0.5))))
+            FACE_CX_RATIO = min(2.0, max(-1.0, float(data.get("face_cx", FACE_CX_RATIO if FACE_CX_RATIO is not None else 0.5))))
             _cy = data.get("face_cy", FACE_CY_RATIO)
             FACE_CY_RATIO = None if _cy is None else min(0.9, max(0.1, float(_cy)))
             FACE_SIZE = min(4.0, max(0.2, float(data.get("face_size", FACE_SIZE))))
             _pp = str(data.get("pip_pos", PIP_POS)).upper()
             PIP_POS = _pp if _pp in ("TR", "TL", "BR", "BL", "FREE") else "BR"
             PIP_SCALE = min(3.0, max(0.1, float(data.get("pip_scale", PIP_SCALE))))
-            PIP_X = min(1.0, max(0.0, float(data.get("pip_x", PIP_X))))
-            PIP_Y = min(1.0, max(0.0, float(data.get("pip_y", PIP_Y))))
+            PIP_X = min(2.0, max(-1.0, float(data.get("pip_x", PIP_X))))
+            PIP_Y = min(2.0, max(-1.0, float(data.get("pip_y", PIP_Y))))
             try:
                 _cr = [min(1.0, max(0.0, float(v))) for v in data.get("pip_crop", PIP_CROP)]
                 if len(_cr) == 4 and _cr[2] > 0.05 and _cr[3] > 0.05:
@@ -284,12 +284,12 @@ def load_calibration():
             except Exception:
                 pass
             SLIDE_ZOOM = min(2.0, max(0.3, float(data.get("slide_zoom", SLIDE_ZOOM))))
-            SLIDE_X = min(1.0, max(0.0, float(data.get("slide_x", SLIDE_X))))
-            SLIDE_Y = min(1.0, max(0.0, float(data.get("slide_y", SLIDE_Y))))
+            SLIDE_X = min(2.0, max(-1.0, float(data.get("slide_x", SLIDE_X))))
+            SLIDE_Y = min(2.0, max(-1.0, float(data.get("slide_y", SLIDE_Y))))
             VSLIDE_MODE = bool(data.get("vslide_mode", VSLIDE_MODE))
             VSLIDE_SCALE = min(1.5, max(0.2, float(data.get("vslide_scale", VSLIDE_SCALE))))
-            VSLIDE_X = min(1.0, max(0.0, float(data.get("vslide_x", VSLIDE_X))))
-            VSLIDE_Y = min(1.0, max(0.0, float(data.get("vslide_y", VSLIDE_Y))))
+            VSLIDE_X = min(2.0, max(-1.0, float(data.get("vslide_x", VSLIDE_X))))
+            VSLIDE_Y = min(2.0, max(-1.0, float(data.get("vslide_y", VSLIDE_Y))))
             _vf = str(data.get("vslide_fit", VSLIDE_FIT)).upper()
             VSLIDE_FIT = _vf if _vf in ("FIT", "STRETCH", "FILL") else "FIT"
             try:

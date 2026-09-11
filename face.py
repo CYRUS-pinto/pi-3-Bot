@@ -282,13 +282,13 @@ class TARSFace:
 
         # Layout Studio placement (pocket remote): position + scale freely, defaults = stock look.
         _fs = min(4.0, max(0.2, float(getattr(config, "FACE_SIZE", 1.0))))
-        _cxr = min(0.9, max(0.1, float(getattr(config, "FACE_CX_RATIO", 0.5))))
+        _cxr = min(2.0, max(-1.0, float(getattr(config, "FACE_CX_RATIO", 0.5))))
         _cyr = getattr(config, "FACE_CY_RATIO", None)
         ow  = max(44, int(self.sw * eye_w_ratio * _fs))
         oh  = max(64, int(self.sh * eye_h_ratio * _fs))
         gap = max(24, int(self.sw * gap_ratio * _fs))
-        cx  = min(self.sw - 1, max(1, int(self.sw * _cxr)))
-        cy  = min(self.sh - 1, max(1, int(self.sh * (min(0.9, max(0.1, float(_cyr))) if _cyr is not None else face_y_ratio))))
+        cx  = min(2 * self.sw, max(-self.sw, int(self.sw * _cxr)))
+        cy  = min(2 * self.sh, max(-self.sh, int(self.sh * (min(2.0, max(-1.0, float(_cyr))) if _cyr is not None else face_y_ratio))))
         lx  = cx - gap // 2 - ow
         rx  = cx + gap // 2
         ins = max(3, int(ow * 0.146))
@@ -303,8 +303,8 @@ class TARSFace:
         head_margin_x = max(36, int(ow * 0.40))
         head_margin_y = max(24, int(oh * 0.25))
 
-        fx = max(0, lx - _GLOW_MARGIN - head_margin_x)
-        fy = max(0, cy - oh // 2 - _GLOW_MARGIN - head_margin_y)
+        fx = max(1 - 2 * ow, min(self.sw - 1, lx - _GLOW_MARGIN - head_margin_x))
+        fy = max(1 - 2 * oh, min(self.sh - 1, cy - oh // 2 - _GLOW_MARGIN - head_margin_y))
         fr = min(self.sw, rx + ow + _GLOW_MARGIN + head_margin_x)
         fb = min(self.sh, mcy + mh // 2 + 16 + head_margin_y)
         fw, fh = max(1, fr - fx), max(1, fb - fy)

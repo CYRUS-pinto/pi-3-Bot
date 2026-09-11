@@ -22,15 +22,16 @@ assert config.GESTURE_WALK_DEBOUNCE_SEC <= 1.5, config.GESTURE_WALK_DEBOUNCE_SEC
 
 # Layout Studio values are user-tunable from the remote: assert VALIDITY (ranges/membership),
 # not equality — the pocket remote legitimately rewrites these (Pi reported FREE = user dragged it).
-assert 0.4 <= config.FACE_SIZE <= 2.0, config.FACE_SIZE
-assert 0.1 <= config.FACE_CX_RATIO <= 0.9, config.FACE_CX_RATIO
-assert config.FACE_CY_RATIO is None or 0.1 <= config.FACE_CY_RATIO <= 0.9
+# Full-freedom bounds: positions roam -1..2 (off-canvas clips), sizes capped at crash-safe maxima.
+assert 0.2 <= config.FACE_SIZE <= 4.0, config.FACE_SIZE
+assert -1.0 <= config.FACE_CX_RATIO <= 2.0, config.FACE_CX_RATIO
+assert config.FACE_CY_RATIO is None or -1.0 <= config.FACE_CY_RATIO <= 2.0
 assert config.PIP_POS in ("TR", "TL", "BR", "BL", "FREE"), config.PIP_POS
-assert 0.3 <= config.PIP_SCALE <= 1.5, config.PIP_SCALE
-assert 0.0 <= config.PIP_X <= 1.0 and 0.0 <= config.PIP_Y <= 1.0
+assert 0.1 <= config.PIP_SCALE <= 3.0, config.PIP_SCALE
+assert -1.0 <= config.PIP_X <= 2.0 and -1.0 <= config.PIP_Y <= 2.0
 assert len(list(config.PIP_CROP)) == 4, config.PIP_CROP
-assert 0.5 <= config.SLIDE_ZOOM <= 1.0, config.SLIDE_ZOOM
-assert 0.0 <= config.SLIDE_X <= 1.0 and 0.0 <= config.SLIDE_Y <= 1.0
+assert 0.3 <= config.SLIDE_ZOOM <= 2.0, config.SLIDE_ZOOM
+assert -1.0 <= config.SLIDE_X <= 2.0 and -1.0 <= config.SLIDE_Y <= 2.0
 assert config.VSLIDE_MODE is False, "vslide ships OFF (opt-in per venue)"
 assert 0.3 <= config.VSLIDE_SCALE <= 1.0 and 0.0 <= config.VSLIDE_X <= 1.0 and 0.0 <= config.VSLIDE_Y <= 1.0
 assert config.VSLIDE_FIT == "FIT" and config.VSLIDE_ROT == 0

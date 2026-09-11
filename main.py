@@ -920,7 +920,7 @@ def main():
                 # ── Layout Studio: move/resize face + PiP live from the pocket remote ──
                 _layout_touched = False
                 if "face_cx" in payload:
-                    config.FACE_CX_RATIO = min(0.9, max(0.1, float(payload["face_cx"])))
+                    config.FACE_CX_RATIO = min(2.0, max(-1.0, float(payload["face_cx"])))
                     _layout_touched = True
                 if "face_cy" in payload:
                     _v = payload["face_cy"]
@@ -938,12 +938,12 @@ def main():
                     config.PIP_SCALE = min(3.0, max(0.1, float(payload["pip_scale"])))
                     _layout_touched = True
                 if "pip_x" in payload:
-                    config.PIP_X = min(1.0, max(0.0, float(payload["pip_x"])))
+                    config.PIP_X = min(2.0, max(-1.0, float(payload["pip_x"])))
                     if str(getattr(config, "PIP_POS", "BR")).upper() != "FREE":
                         config.PIP_POS = "FREE"  # dragging X/Y implies free placement
                     _layout_touched = True
                 if "pip_y" in payload:
-                    config.PIP_Y = min(1.0, max(0.0, float(payload["pip_y"])))
+                    config.PIP_Y = min(2.0, max(-1.0, float(payload["pip_y"])))
                     if str(getattr(config, "PIP_POS", "BR")).upper() != "FREE":
                         config.PIP_POS = "FREE"
                     _layout_touched = True
@@ -959,10 +959,10 @@ def main():
                     config.SLIDE_ZOOM = min(2.0, max(0.3, float(payload["slide_zoom"])))
                     _layout_touched = True
                 if "slide_x" in payload:
-                    config.SLIDE_X = min(1.0, max(0.0, float(payload["slide_x"])))
+                    config.SLIDE_X = min(2.0, max(-1.0, float(payload["slide_x"])))
                     _layout_touched = True
                 if "slide_y" in payload:
-                    config.SLIDE_Y = min(1.0, max(0.0, float(payload["slide_y"])))
+                    config.SLIDE_Y = min(2.0, max(-1.0, float(payload["slide_y"])))
                     _layout_touched = True
                 if "vslide_mode" in payload:
                     config.VSLIDE_MODE = bool(payload["vslide_mode"])
@@ -971,10 +971,10 @@ def main():
                     config.VSLIDE_SCALE = min(1.5, max(0.2, float(payload["vslide_scale"])))
                     _layout_touched = True
                 if "vslide_x" in payload:
-                    config.VSLIDE_X = min(1.0, max(0.0, float(payload["vslide_x"])))
+                    config.VSLIDE_X = min(2.0, max(-1.0, float(payload["vslide_x"])))
                     _layout_touched = True
                 if "vslide_y" in payload:
-                    config.VSLIDE_Y = min(1.0, max(0.0, float(payload["vslide_y"])))
+                    config.VSLIDE_Y = min(2.0, max(-1.0, float(payload["vslide_y"])))
                     _layout_touched = True
                 # ── Slide text editing: rewrite a slide's title/desc live, persisted ──
                 if "slide_text" in payload and isinstance(payload["slide_text"], dict):

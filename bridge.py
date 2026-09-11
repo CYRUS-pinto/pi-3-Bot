@@ -745,13 +745,13 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;">
       <span>🤖 FACE X</span><span id="lblFaceX" style="color:var(--text); font-weight:bold;">50%</span>
     </div>
-    <input type="range" id="rngFaceX" min="10" max="90" step="1" value="50" oninput="onLayoutChange()" style="width:100%; accent-color:var(--gold);">
+    <input type="range" id="rngFaceX" min="-100" max="200" step="1" value="50" oninput="onLayoutChange()" style="width:100%; accent-color:var(--gold);">
   </div>
   <div style="margin-bottom:8px;">
     <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;">
       <span>🤖 FACE Y</span><span id="lblFaceY" style="color:var(--text); font-weight:bold;">AUTO</span>
     </div>
-    <input type="range" id="rngFaceY" min="10" max="90" step="1" value="44" oninput="onLayoutChange()" style="width:100%; accent-color:var(--gold);">
+    <input type="range" id="rngFaceY" min="-100" max="200" step="1" value="44" oninput="onLayoutChange()" style="width:100%; accent-color:var(--gold);">
   </div>
   <div style="margin-bottom:10px;">
     <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;">
@@ -773,13 +773,13 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;">
       <span>📹 BOX X</span><span id="lblPipX" style="color:var(--text); font-weight:bold;">100%</span>
     </div>
-    <input type="range" id="rngPipX" min="0" max="100" step="1" value="100" oninput="onLayoutChange()" style="width:100%; accent-color:var(--cyan);">
+    <input type="range" id="rngPipX" min="-100" max="200" step="1" value="100" oninput="onLayoutChange()" style="width:100%; accent-color:var(--cyan);">
   </div>
   <div style="margin-bottom:8px;">
     <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;">
       <span>📹 BOX Y</span><span id="lblPipY" style="color:var(--text); font-weight:bold;">100%</span>
     </div>
-    <input type="range" id="rngPipY" min="0" max="100" step="1" value="100" oninput="onLayoutChange()" style="width:100%; accent-color:var(--cyan);">
+    <input type="range" id="rngPipY" min="-100" max="200" step="1" value="100" oninput="onLayoutChange()" style="width:100%; accent-color:var(--cyan);">
   </div>
   <div style="margin-bottom:10px;">
     <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;">
@@ -801,8 +801,8 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     <input type="range" id="rngZoom" min="30" max="200" step="1" value="100" oninput="onLayoutChange()" style="width:100%; accent-color:var(--gold);">
   </div>
   <div class="grid grid-2" style="margin-bottom:8px;">
-    <div><div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;"><span>🖥️ SLIDE X</span><span id="lblSlideX" style="color:var(--text); font-weight:bold;">50%</span></div><input type="range" id="rngSlideX" min="0" max="100" step="1" value="50" oninput="onLayoutChange()" style="width:100%; accent-color:var(--gold);"></div>
-    <div><div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;"><span>🖥️ SLIDE Y</span><span id="lblSlideY" style="color:var(--text); font-weight:bold;">50%</span></div><input type="range" id="rngSlideY" min="0" max="100" step="1" value="50" oninput="onLayoutChange()" style="width:100%; accent-color:var(--gold);"></div>
+    <div><div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;"><span>🖥️ SLIDE X</span><span id="lblSlideX" style="color:var(--text); font-weight:bold;">50%</span></div><input type="range" id="rngSlideX" min="-100" max="200" step="1" value="50" oninput="onLayoutChange()" style="width:100%; accent-color:var(--gold);"></div>
+    <div><div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;"><span>🖥️ SLIDE Y</span><span id="lblSlideY" style="color:var(--text); font-weight:bold;">50%</span></div><input type="range" id="rngSlideY" min="-100" max="200" step="1" value="50" oninput="onLayoutChange()" style="width:100%; accent-color:var(--gold);"></div>
   </div>
   <div style="margin-bottom:8px;">
     <button id="btnVslide" onclick="toggleVslide()" style="width:100%; padding:10px 8px; font-size:11px; font-weight:bold;">📱 PORTRAIT SLIDES: OFF</button>
@@ -825,11 +825,11 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
       <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;">
         <span>📱 COLUMN SIZE</span><span id="lblVslideSize" style="color:var(--text); font-weight:bold;">90%</span>
       </div>
-      <input type="range" id="rngVslideSize" min="30" max="100" step="1" value="90" oninput="onLayoutChange()" style="width:100%; accent-color:var(--gold);">
+      <input type="range" id="rngVslideSize" min="20" max="150" step="1" value="90" oninput="onVslideChange()" style="width:100%; accent-color:var(--gold);">
     </div>
     <div class="grid grid-2" style="margin-bottom:10px;">
-      <div><div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;"><span>📱 COLUMN X</span><span id="lblVslideX" style="color:var(--text); font-weight:bold;">50%</span></div><input type="range" id="rngVslideX" min="0" max="100" step="1" value="50" oninput="onLayoutChange()" style="width:100%; accent-color:var(--gold);"></div>
-      <div><div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;"><span>📱 COLUMN Y</span><span id="lblVslideY" style="color:var(--text); font-weight:bold;">50%</span></div><input type="range" id="rngVslideY" min="0" max="100" step="1" value="50" oninput="onLayoutChange()" style="width:100%; accent-color:var(--gold);"></div>
+      <div><div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;"><span>📱 COLUMN X</span><span id="lblVslideX" style="color:var(--text); font-weight:bold;">50%</span></div><input type="range" id="rngVslideX" min="-100" max="200" step="1" value="50" oninput="onVslideChange()" style="width:100%; accent-color:var(--gold);"></div>
+      <div><div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;"><span>📱 COLUMN Y</span><span id="lblVslideY" style="color:var(--text); font-weight:bold;">50%</span></div><input type="range" id="rngVslideY" min="-100" max="200" step="1" value="50" oninput="onVslideChange()" style="width:100%; accent-color:var(--gold);"></div>
     </div>
   </div>
   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
@@ -1483,10 +1483,11 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     const zm = +document.getElementById('rngZoom').value;
     const sx = +document.getElementById('rngSlideX').value;
     const sy = +document.getElementById('rngSlideY').value;
-    const vs = +document.getElementById('rngVslideSize').value;
-    const vx = +document.getElementById('rngVslideX').value;
-    const vy = +document.getElementById('rngVslideY').value;
-    document.getElementById('lblVslideSize').textContent = vs + '%';
+    // ponytail: slide sliders dual-post into the vslide column too (whichever renderer
+    // is live responds); dedicated column sliders post alone via onVslideChange.
+    const vz = Math.min(150, Math.max(20, zm));
+    const vx = sx, vy = sy;
+    document.getElementById('lblVslideSize').textContent = vz + '%';
     document.getElementById('lblVslideX').textContent = vx + '%';
     document.getElementById('lblVslideY').textContent = vy + '%';
     document.getElementById('lblFaceX').textContent = fx + '%';
@@ -1506,7 +1507,16 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
       pip_scale: ps / 100, pip_x: px / 100, pip_y: py / 100,
       pip_crop: [cx / 100, cy / 100, cw / 100, ch / 100],
       slide_zoom: zm / 100, slide_x: sx / 100, slide_y: sy / 100,
-      vslide_scale: vs / 100, vslide_x: vx / 100, vslide_y: vy / 100});
+      vslide_scale: vz / 100, vslide_x: vx / 100, vslide_y: vy / 100});
+  }
+  function onVslideChange() {
+    const vs = +document.getElementById('rngVslideSize').value;
+    const vx = +document.getElementById('rngVslideX').value;
+    const vy = +document.getElementById('rngVslideY').value;
+    document.getElementById('lblVslideSize').textContent = vs + '%';
+    document.getElementById('lblVslideX').textContent = vx + '%';
+    document.getElementById('lblVslideY').textContent = vy + '%';
+    layoutPost({vslide_scale: vs / 100, vslide_x: vx / 100, vslide_y: vy / 100});
   }
   function setPipPos(corner) {
     ['TL','TR','BL','BR'].forEach(c => {
@@ -1667,30 +1677,31 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     const now = Date.now();
     if (!final && now - LC.lastPost < 250) return;
     LC.lastPost = now;
-    // ponytail: Paint has canvas edges too — boxes cap at 2x canvas (past that is mush
-    // or an OOM vector, never a look). Positions stay inside.
-    const clamp01 = (v) => Math.min(1, Math.max(0, v));
+    // ponytail: full freedom — boxes roam -100%..200% (off-canvas clips, pygame handles it).
+    // Surface sizes still capped (face 4x, cam 3x, zoom 2x): beyond that is mush or an OOM vector.
+    const clampFree = (v) => Math.min(2, Math.max(-1, v));
+    const anchor = (p, s) => (s >= 1 ? 0.5 : p / Math.max(0.01, 1 - s));
     if (id === 'boxFace') {
-      layoutPost({face_cx: +clamp01(g.x + g.w / 2).toFixed(3),
-        face_cy: +clamp01(g.y + g.h / 2).toFixed(3),
+      layoutPost({face_cx: +clampFree(g.x + g.w / 2).toFixed(3),
+        face_cy: +clampFree(g.y + g.h / 2).toFixed(3),
         face_size: +Math.min(4, Math.max(0.2, g.h / 0.45)).toFixed(2)});
     } else if (id === 'boxCam') {
       layoutPost({pip_pos: 'FREE',
-        pip_x: +clamp01(g.w >= 1 ? 1 : g.x / Math.max(0.01, 1 - g.w)).toFixed(3),
-        pip_y: +clamp01(g.h >= 1 ? 1 : g.y / Math.max(0.01, 1 - g.h)).toFixed(3),
+        pip_x: +clampFree(anchor(g.x, g.w)).toFixed(3),
+        pip_y: +clampFree(anchor(g.y, g.h)).toFixed(3),
         pip_scale: +Math.min(3, Math.max(0.1, g.w / 0.34)).toFixed(2)});
     } else if (id === 'boxSlide') {
       if (vslideOn) {
         layoutPost({vslide_scale: +Math.min(1.5, Math.max(0.2, g.h)).toFixed(2),
-          vslide_x: +clamp01(g.w >= 1 ? 0.5 : g.x / Math.max(0.01, 1 - g.w)).toFixed(3),
-          vslide_y: +clamp01(g.h >= 1 ? 0.5 : g.y / Math.max(0.01, 1 - g.h)).toFixed(3)});
+          vslide_x: +clampFree(anchor(g.x, g.w)).toFixed(3),
+          vslide_y: +clampFree(anchor(g.y, g.h)).toFixed(3)});
       } else {
         layoutPost({slide_zoom: +Math.min(2, Math.max(0.3, g.w)).toFixed(2),
-          slide_x: +clamp01(g.w >= 1 ? 0.5 : g.x / Math.max(0.01, 1 - g.w)).toFixed(3),
-          slide_y: +clamp01(g.h >= 1 ? 0.5 : g.y / Math.max(0.01, 1 - g.h)).toFixed(3)});
+          slide_x: +clampFree(anchor(g.x, g.w)).toFixed(3),
+          slide_y: +clampFree(anchor(g.y, g.h)).toFixed(3)});
       }
     }
-    if (final) showToast('🎨 LAYOUT APPLIED');
+    if (final) showToast('LAYOUT APPLIED');
   }
   function lcInitBoxes(c, force) {
     if (!c || LC.drag) return;
