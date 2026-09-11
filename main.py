@@ -504,7 +504,31 @@ def main():
         boot.resize(canvas_w, canvas_h)
         card_mgr.resize(canvas_w, canvas_h, fonts)
         hud.resize(canvas_w, canvas_h, fonts)
-        face_label, face_label_x, face_label_y, face_hint, face_hint_x, face_hint_y = make_face_overlays(canvas_w, canvas_h, fonts)
+    face_label, face_label_x, face_label_y, face_hint, face_hint_x, face_hint_y = make_face_overlays(canvas_w, canvas_h, fonts)
+
+    # ── Vertical-slides column (portrait cards floating mid-screen, thermocol-proof) ──
+    # ponytail: landscape panel whose edges hide behind foam -> slides become a portrait
+    # column (the vertical card design) instead of a cropped fullscreen card. Lazy-built,
+    # keyed on (scale, canvas size); landscape-only (portrait panels already show cards).
+    vs_fonts = None
+    vs_mgr = None
+    vs_canvas = None
+    vs_key = None
+
+    def _vslide_layer():
+        nonlocal vs_fonts, vs_mgr, vs_canvas, vs_key
+        if not getattr(config, "VSLIDE_MODE", False) or canvas_w <= canvas_h:
+            return (None, None)
+        _vs = min(1.0, max(0.3, float(getattr(config, "VSLIDE_SCALE", 0.9))))
+        _key = (round(_vs, 3), canvas_w, canvas_h)
+        if vs_mgr is None or _key != vs_key:
+            _vw = max(96, int(canvas_h * 0.5625 * _vs))
+            _vh = max(96, int(canvas_h * _vs))
+            vs_fonts = make_fonts(_vw, _vh)
+            vs_mgr = EventCardManager(_vw, _vh, vs_fonts)
+            vs_canvas = pygame.Surface((_vw, _vh)).convert()
+            vs_key = _key
+        return (vs_mgr, vs_canvas)
         renderer.invalidate_full()
 
     from vision import get_vision_metrics as _get_vm  # ponytail: cached import — thermal governor reads cooling without per-frame cost
@@ -930,6 +954,18 @@ def main():
                 if "slide_y" in payload:
                     config.SLIDE_Y = min(1.0, max(0.0, float(payload["slide_y"])))
                     _layout_touched = True
+                if "vslide_mode" in payload:
+                    config.VSLIDE_MODE = bool(payload["vslide_mode"])
+                    banner_items.append(f"VSLIDES: {'COLUMN' if config.VSLIDE_MODE else 'FULL'}")
+                if "vslide_scale" in payload:
+                    config.VSLIDE_SCALE = min(1.0, max(0.3, float(payload["vslide_scale"])))
+                    _layout_touched = True
+                if "vslide_x" in payload:
+                    config.VSLIDE_X = min(1.0, max(0.0, float(payload["vslide_x"])))
+                    _layout_touched = True
+                if "vslide_y" in payload:
+                    config.VSLIDE_Y = min(1.0, max(0.0, float(payload["vslide_y"])))
+                    _layout_touched = True
                 if _layout_touched:
                     renderer.face._invalidate()  # recompute geometry next draw; strip cache re-keys on rect
                     # ponytail: NO banner for layout drags — banners force the full pipeline for 2s,
@@ -1306,14 +1342,26 @@ def main():
                     # Draw optical target acquisition HUD during face mode
                     hud.draw(canvas, total_t)
                 else:
-                    card_mgr.draw(canvas, play)
+                    _vmgr, _vc = _vslide_layer()
+                    if _vmgr is not None:
+                        # portrait column mid-screen (bg + stars already drawn behind it)
+                        _vmgr.draw(_vc, play)
+                        _vx = int(min(1.0, max(0.0, float(getattr(config, "VSLIDE_X", 0.5)))) * max(0, canvas_w - _vc.get_width()))
+                        _vy = int(min(1.0, max(0.0, float(getattr(config, "VSLIDE_Y", 0.5)))) * max(0, canvas_h - _vc.get_height()))
+                        canvas.blit(_vc, (_vx, _vy))
+                        # zoom letterbox applies to fullscreen cards only; column has its own scale
+                        _vskip_zoom = True
+                    else:
+                        card_mgr.draw(canvas, play)
+                        _vskip_zoom = False
                     # ponytail: slide zoom/position must work in the FULL pipeline too — rot-0
                     # landscape never runs the strip path, so strip-only zoom was dead there.
                     # ~2-3ms during EVENT only (smoothscale down + centered blit).
+                    # Skipped for vslide column (it carries its own scale + position above).
                     _fz = min(1.0, max(0.5, float(getattr(config, "SLIDE_ZOOM", 1.0))))
                     _fx = min(1.0, max(0.0, float(getattr(config, "SLIDE_X", 0.5))))
                     _fy = min(1.0, max(0.0, float(getattr(config, "SLIDE_Y", 0.5))))
-                    if _fz < 0.999 or abs(_fx - 0.5) > 0.001 or abs(_fy - 0.5) > 0.001:
+                    if not _vskip_zoom and (_fz < 0.999 or abs(_fx - 0.5) > 0.001 or abs(_fy - 0.5) > 0.001):
                         _zw, _zh = max(1, int(canvas_w * _fz)), max(1, int(canvas_h * _fz))
                         _zs = pygame.transform.smoothscale(canvas, (_zw, _zh))
                         canvas.fill(config.VOID)

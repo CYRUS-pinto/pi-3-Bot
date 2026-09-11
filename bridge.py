@@ -749,9 +749,24 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     </div>
     <input type="range" id="rngZoom" min="50" max="100" step="1" value="100" oninput="onLayoutChange()" style="width:100%; accent-color:var(--gold);">
   </div>
-  <div class="grid grid-2" style="margin-bottom:10px;">
+  <div class="grid grid-2" style="margin-bottom:8px;">
     <div><div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;"><span>🖥️ SLIDE X</span><span id="lblSlideX" style="color:var(--text); font-weight:bold;">50%</span></div><input type="range" id="rngSlideX" min="0" max="100" step="1" value="50" oninput="onLayoutChange()" style="width:100%; accent-color:var(--gold);"></div>
     <div><div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;"><span>🖥️ SLIDE Y</span><span id="lblSlideY" style="color:var(--text); font-weight:bold;">50%</span></div><input type="range" id="rngSlideY" min="0" max="100" step="1" value="50" oninput="onLayoutChange()" style="width:100%; accent-color:var(--gold);"></div>
+  </div>
+  <div style="margin-bottom:8px;">
+    <button id="btnVslide" onclick="toggleVslide()" style="width:100%; padding:10px 8px; font-size:11px; font-weight:bold;">📱 PORTRAIT SLIDES: OFF</button>
+  </div>
+  <div id="vslideCtl" style="display:none;">
+    <div style="margin-bottom:8px;">
+      <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;">
+        <span>📱 COLUMN SIZE</span><span id="lblVslideSize" style="color:var(--text); font-weight:bold;">90%</span>
+      </div>
+      <input type="range" id="rngVslideSize" min="30" max="100" step="1" value="90" oninput="onLayoutChange()" style="width:100%; accent-color:var(--gold);">
+    </div>
+    <div class="grid grid-2" style="margin-bottom:10px;">
+      <div><div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;"><span>📱 COLUMN X</span><span id="lblVslideX" style="color:var(--text); font-weight:bold;">50%</span></div><input type="range" id="rngVslideX" min="0" max="100" step="1" value="50" oninput="onLayoutChange()" style="width:100%; accent-color:var(--gold);"></div>
+      <div><div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;"><span>📱 COLUMN Y</span><span id="lblVslideY" style="color:var(--text); font-weight:bold;">50%</span></div><input type="range" id="rngVslideY" min="0" max="100" step="1" value="50" oninput="onLayoutChange()" style="width:100%; accent-color:var(--gold);"></div>
+    </div>
   </div>
   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
     <span style="font-size:11px; color:var(--muted);">✋ HAND LANDMARKS</span>
@@ -1404,6 +1419,12 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     const zm = +document.getElementById('rngZoom').value;
     const sx = +document.getElementById('rngSlideX').value;
     const sy = +document.getElementById('rngSlideY').value;
+    const vs = +document.getElementById('rngVslideSize').value;
+    const vx = +document.getElementById('rngVslideX').value;
+    const vy = +document.getElementById('rngVslideY').value;
+    document.getElementById('lblVslideSize').textContent = vs + '%';
+    document.getElementById('lblVslideX').textContent = vx + '%';
+    document.getElementById('lblVslideY').textContent = vy + '%';
     document.getElementById('lblFaceX').textContent = fx + '%';
     document.getElementById('lblFaceY').textContent = fy + '%';
     document.getElementById('lblFaceSize').textContent = fs + '%';
@@ -1420,7 +1441,8 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     layoutPost({face_cx: fx / 100, face_cy: fy / 100, face_size: fs / 100,
       pip_scale: ps / 100, pip_x: px / 100, pip_y: py / 100,
       pip_crop: [cx / 100, cy / 100, cw / 100, ch / 100],
-      slide_zoom: zm / 100, slide_x: sx / 100, slide_y: sy / 100});
+      slide_zoom: zm / 100, slide_x: sx / 100, slide_y: sy / 100,
+      vslide_scale: vs / 100, vslide_x: vx / 100, vslide_y: vy / 100});
   }
   function setPipPos(corner) {
     ['TL','TR','BL','BR'].forEach(c => {
@@ -1452,10 +1474,30 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     document.getElementById('lblSlideX').textContent = '50%';
     document.getElementById('lblSlideY').textContent = '50%';
     document.getElementById('lblZoom').textContent = '100%';
+    document.getElementById('rngVslideSize').value = 90;
+    document.getElementById('rngVslideX').value = 50;
+    document.getElementById('rngVslideY').value = 50;
+    vslideOn = false; updateVslideUI();
     layoutPost({face_cx: 0.5, face_cy: null, face_size: 1.0, pip_pos: 'BR',
       pip_x: 1.0, pip_y: 1.0, pip_scale: 1.0, pip_crop: [0, 0, 1, 1],
-      slide_zoom: 1.0, slide_x: 0.5, slide_y: 0.5},
+      slide_zoom: 1.0, slide_x: 0.5, slide_y: 0.5,
+      vslide_mode: false, vslide_scale: 0.9, vslide_x: 0.5, vslide_y: 0.5},
       '↩ LAYOUT RESET');
+  }
+  let vslideOn = false;
+  function toggleVslide() {
+    vslideOn = !vslideOn;
+    updateVslideUI();
+    layoutPost({vslide_mode: vslideOn}, vslideOn ? '📱 PORTRAIT COLUMN ON' : '🖥️ FULL SLIDES');
+  }
+  function updateVslideUI() {
+    const b = document.getElementById('btnVslide');
+    if (b) {
+      b.textContent = vslideOn ? '📱 PORTRAIT SLIDES: ON' : '📱 PORTRAIT SLIDES: OFF';
+      b.className = vslideOn ? 'mint' : '';
+    }
+    const ctl = document.getElementById('vslideCtl');
+    if (ctl) ctl.style.display = vslideOn ? 'block' : 'none';
   }
   function syncLayoutUI(c) {
     if (!c) return;
@@ -1472,6 +1514,10 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     if (c.slide_zoom !== undefined) { set('rngZoom', c.slide_zoom * 100); calib_face_lbl('lblZoom', c.slide_zoom * 100, '%'); }
     if (c.slide_x !== undefined) { set('rngSlideX', c.slide_x * 100); calib_face_lbl('lblSlideX', c.slide_x * 100, '%'); }
     if (c.slide_y !== undefined) { set('rngSlideY', c.slide_y * 100); calib_face_lbl('lblSlideY', c.slide_y * 100, '%'); }
+    if (c.vslide_mode !== undefined) { vslideOn = !!c.vslide_mode; updateVslideUI(); }
+    if (c.vslide_scale !== undefined) { set('rngVslideSize', c.vslide_scale * 100); calib_face_lbl('lblVslideSize', c.vslide_scale * 100, '%'); }
+    if (c.vslide_x !== undefined) { set('rngVslideX', c.vslide_x * 100); calib_face_lbl('lblVslideX', c.vslide_x * 100, '%'); }
+    if (c.vslide_y !== undefined) { set('rngVslideY', c.vslide_y * 100); calib_face_lbl('lblVslideY', c.vslide_y * 100, '%'); }
     if (c.pip_pos !== undefined) {
       ['TL','TR','BL','BR'].forEach(x => {
         const b = document.getElementById('pip' + x);
@@ -2533,6 +2579,10 @@ class WebRemoteHandler(BaseHTTPRequestHandler):
                     "slide_zoom": getattr(config, "SLIDE_ZOOM", 1.0),
                     "slide_x": getattr(config, "SLIDE_X", 0.5),
                     "slide_y": getattr(config, "SLIDE_Y", 0.5),
+                    "vslide_mode": getattr(config, "VSLIDE_MODE", False),
+                    "vslide_scale": getattr(config, "VSLIDE_SCALE", 0.9),
+                    "vslide_x": getattr(config, "VSLIDE_X", 0.5),
+                    "vslide_y": getattr(config, "VSLIDE_Y", 0.5),
                 }
             }
             self.send_response(200)

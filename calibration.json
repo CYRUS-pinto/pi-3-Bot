@@ -41,5 +41,9 @@
   "pip_crop": [0.0, 0.0, 1.0, 1.0],
   "slide_zoom": 1.0,
   "slide_x": 0.5,
-  "slide_y": 0.5
+  "slide_y": 0.5,
+  "vslide_mode": false,
+  "vslide_scale": 0.9,
+  "vslide_x": 0.5,
+  "vslide_y": 0.5
 }

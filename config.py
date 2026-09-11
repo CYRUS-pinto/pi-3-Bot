@@ -132,6 +132,12 @@ PIP_CROP      = [0.0, 0.0, 1.0, 1.0]  # camera crop fractions [x, y, w, h] — c
 SLIDE_ZOOM    = 1.0    # event-slide scale (0.5 - 1.0 letterboxed; 1.0 = full-bleed)
 SLIDE_X       = 0.5    # slide anchor X fraction in the letterbox (0 - 1)
 SLIDE_Y       = 0.5    # slide anchor Y fraction in the letterbox (0 - 1)
+# ── Vertical-slides column (portrait cards floating mid-screen on a landscape
+# panel whose edges hide behind thermocol). Toggle from the pocket remote.
+VSLIDE_MODE   = False  # portrait card column instead of fullscreen landscape card
+VSLIDE_SCALE  = 0.9    # column height as screen-height fraction (0.3 - 1.0)
+VSLIDE_X      = 0.5    # column anchor X fraction (0 - 1)
+VSLIDE_Y      = 0.5    # column anchor Y fraction (0 - 1)
 
 # ── Calibration & Live Sightline Controls ────────────────────────────────────
 MIRROR_GAZE_X         = False    # Invert horizontal eye gaze tracking (toggle if robot eye looks opposite to you)
@@ -222,6 +228,7 @@ def load_calibration():
     global SWIPE_ANIMATION_ENABLED, GESTURE_COOLDOWN_SEC
     global FACE_CX_RATIO, FACE_CY_RATIO, FACE_SIZE, PIP_POS, PIP_SCALE
     global PIP_X, PIP_Y, PIP_CROP, SLIDE_ZOOM, SLIDE_X, SLIDE_Y
+    global VSLIDE_MODE, VSLIDE_SCALE, VSLIDE_X, VSLIDE_Y
     if os.path.exists(CALIBRATION_FILE):
         try:
             with open(CALIBRATION_FILE, "r") as f:
@@ -274,6 +281,10 @@ def load_calibration():
             SLIDE_ZOOM = min(1.0, max(0.5, float(data.get("slide_zoom", SLIDE_ZOOM))))
             SLIDE_X = min(1.0, max(0.0, float(data.get("slide_x", SLIDE_X))))
             SLIDE_Y = min(1.0, max(0.0, float(data.get("slide_y", SLIDE_Y))))
+            VSLIDE_MODE = bool(data.get("vslide_mode", VSLIDE_MODE))
+            VSLIDE_SCALE = min(1.0, max(0.3, float(data.get("vslide_scale", VSLIDE_SCALE))))
+            VSLIDE_X = min(1.0, max(0.0, float(data.get("vslide_x", VSLIDE_X))))
+            VSLIDE_Y = min(1.0, max(0.0, float(data.get("vslide_y", VSLIDE_Y))))
         except Exception:
             pass
 
@@ -323,6 +334,10 @@ def save_calibration():
         "slide_zoom": SLIDE_ZOOM,
         "slide_x": SLIDE_X,
         "slide_y": SLIDE_Y,
+        "vslide_mode": VSLIDE_MODE,
+        "vslide_scale": VSLIDE_SCALE,
+        "vslide_x": VSLIDE_X,
+        "vslide_y": VSLIDE_Y,
     }
     try:
         with open(CALIBRATION_FILE, "w") as f:
