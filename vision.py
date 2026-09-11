@@ -41,7 +41,12 @@ except ImportError:
 # (https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task)
 try:
     from mediapipe.tasks.python import vision as _mp_vision
-    from mediapipe.tasks.python import base_options as _mp_base
+    try:
+        # 1.0.x layout (Pi-proven)
+        from mediapipe.tasks.python.core import base_options as _mp_base
+    except ImportError:
+        # pre-1.0 layout
+        from mediapipe.tasks.python import base_options as _mp_base
     import mediapipe as _mp
     HAS_MEDIAPIPE = True
 except ImportError:
@@ -64,7 +69,11 @@ def hand_is_open(pts) -> bool:
 
 class HandConfirm:
     """Lazy MediaPipe HandLandmarker wrapper. Missing lib/model => disabled (fail-open).
-    Call sense() at most every Nth AI frame; it returns (tip_x, tip_y, is_open) or None."""
+    Call sense() at most every Nth AI frame; it returns (tip_x, tip_y, is_open) or None.
+    WALL (proven 2026-09-11): mediapipe 1.0.1 aarch64 SIGILLs on Pi 3 (BCM2837 lacks the
+    ARMv8 crypto ext the wheel was built for) — process DIES at construction, no exception.
+    Do NOT place hand_landmarker.task on a Pi 3. Targets: Pi 4/5, or the x86 laptop companion.
+    The motion pipeline below remains the Pi 3 path and is fully sufficient (see bench logs)."""
 
     def __init__(self, model_path: str | None = None):
         self.ok = False
