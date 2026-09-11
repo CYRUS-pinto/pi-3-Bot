@@ -515,15 +515,18 @@ def main():
     vs_canvas = None
     vs_key = None
 
+    vs_show = None       # cached transformed column (surf, x, y)
+    vs_show_key = None
+
     def _vslide_layer():
+        # Base portrait card at FULL canvas height (scale applies at present, not build).
         nonlocal vs_fonts, vs_mgr, vs_canvas, vs_key
         if not getattr(config, "VSLIDE_MODE", False) or canvas_w <= canvas_h:
             return (None, None)
-        _vs = min(1.0, max(0.3, float(getattr(config, "VSLIDE_SCALE", 0.9))))
-        _key = (round(_vs, 3), canvas_w, canvas_h)
+        _key = (canvas_w, canvas_h)
         if vs_mgr is None or _key != vs_key:
-            _vw = max(96, int(canvas_h * 0.5625 * _vs))
-            _vh = max(96, int(canvas_h * _vs))
+            _vw = max(96, int(canvas_h * 0.5625))
+            _vh = max(96, canvas_h)
             vs_fonts = make_fonts(_vw, _vh)
             vs_mgr = EventCardManager(_vw, _vh, vs_fonts)
             vs_canvas = pygame.Surface((_vw, _vh)).convert()
@@ -966,6 +969,19 @@ def main():
                 if "vslide_y" in payload:
                     config.VSLIDE_Y = min(1.0, max(0.0, float(payload["vslide_y"])))
                     _layout_touched = True
+                if "vslide_fit" in payload:
+                    _vf = str(payload["vslide_fit"]).upper()
+                    if _vf in ("FIT", "STRETCH", "FILL"):
+                        config.VSLIDE_FIT = _vf
+                        _layout_touched = True
+                if "vslide_rot" in payload:
+                    try:
+                        _vr = int(payload["vslide_rot"])
+                        if _vr in (0, 90, 180, 270):
+                            config.VSLIDE_ROT = _vr
+                            _layout_touched = True
+                    except Exception:
+                        pass
                 if _layout_touched:
                     renderer.face._invalidate()  # recompute geometry next draw; strip cache re-keys on rect
                     # ponytail: NO banner for layout drags — banners force the full pipeline for 2s,
@@ -1344,11 +1360,45 @@ def main():
                 else:
                     _vmgr, _vc = _vslide_layer()
                     if _vmgr is not None:
-                        # portrait column mid-screen (bg + stars already drawn behind it)
-                        _vmgr.draw(_vc, play)
-                        _vx = int(min(1.0, max(0.0, float(getattr(config, "VSLIDE_X", 0.5)))) * max(0, canvas_w - _vc.get_width()))
-                        _vy = int(min(1.0, max(0.0, float(getattr(config, "VSLIDE_Y", 0.5)))) * max(0, canvas_h - _vc.get_height()))
-                        canvas.blit(_vc, (_vx, _vy))
+                        # ponytail: column = base card -> content rotate -> FIT/STRETCH/FILL into the
+                        # anchor box. Transformed output cached per (slide, scale, fit, rot, settled);
+                        # reveal frames render direct (0.25s). Per-frame steady cost: one blit.
+                        _vrot = getattr(config, "VSLIDE_ROT", 0)
+                        _vrot = _vrot if _vrot in (0, 90, 180, 270) else 0
+                        _vfit = str(getattr(config, "VSLIDE_FIT", "FIT")).upper()
+                        _vfit = _vfit if _vfit in ("FIT", "STRETCH", "FILL") else "FIT"
+                        _vsc = min(1.0, max(0.3, float(getattr(config, "VSLIDE_SCALE", 0.9))))
+                        _vrev = play.event_reveal_progress >= 1.0
+                        _vk = (play.event_idx, round(_vsc, 3), _vfit, _vrot, _vrev)
+                        if _vk != vs_show_key:
+                            _vmgr.draw(_vc, play)
+                            _card = _vc if _vrot == 0 else pygame.transform.rotate(_vc, _vrot)
+                            _boxH = max(1, int(canvas_h * _vsc))
+                            _boxW = max(1, int(_boxH * 9 / 16))
+                            _cw, _chh = _card.get_size()
+                            if _vfit == "STRETCH":
+                                _show = pygame.transform.scale(_card, (_boxW, _boxH)) if (_cw, _chh) != (_boxW, _boxH) else _card.copy()
+                            elif _vfit == "FILL":
+                                _k = max(_boxW / max(1, _cw), _boxH / max(1, _chh))
+                                _tmp = pygame.transform.scale(_card, (max(1, int(_cw * _k)), max(1, int(_chh * _k))))
+                                _show = pygame.Surface((_boxW, _boxH)).convert()
+                                _show.blit(_tmp, ((_boxW - _tmp.get_width()) // 2, (_boxH - _tmp.get_height()) // 2))
+                                del _tmp
+                            else:  # FIT contain
+                                _k = min(_boxW / max(1, _cw), _boxH / max(1, _chh))
+                                _fw, _fh = max(1, int(_cw * _k)), max(1, int(_chh * _k))
+                                if (_fw, _fh) == (_cw, _chh):
+                                    _show = _card.copy()
+                                else:
+                                    _show = pygame.Surface((_boxW, _boxH)).convert()
+                                    _show.fill(config.VOID)
+                                    _fs = pygame.transform.scale(_card, (_fw, _fh))
+                                    _show.blit(_fs, ((_boxW - _fw) // 2, (_boxH - _fh) // 2))
+                                    del _fs
+                            _vxx = int(min(1.0, max(0.0, float(getattr(config, "VSLIDE_X", 0.5)))) * max(0, canvas_w - _boxW))
+                            _vyy = int(min(1.0, max(0.0, float(getattr(config, "VSLIDE_Y", 0.5)))) * max(0, canvas_h - _boxH))
+                            vs_show, vs_show_key = (_show, _vxx, _vyy), _vk
+                        canvas.blit(vs_show[0], (vs_show[1], vs_show[2]))
                         # zoom letterbox applies to fullscreen cards only; column has its own scale
                         _vskip_zoom = True
                     else:

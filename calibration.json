@@ -45,5 +45,7 @@
   "vslide_mode": false,
   "vslide_scale": 0.9,
   "vslide_x": 0.5,
-  "vslide_y": 0.5
+  "vslide_y": 0.5,
+  "vslide_fit": "FIT",
+  "vslide_rot": 0
 }

@@ -138,6 +138,8 @@ VSLIDE_MODE   = False  # portrait card column instead of fullscreen landscape ca
 VSLIDE_SCALE  = 0.9    # column height as screen-height fraction (0.3 - 1.0)
 VSLIDE_X      = 0.5    # column anchor X fraction (0 - 1)
 VSLIDE_Y      = 0.5    # column anchor Y fraction (0 - 1)
+VSLIDE_FIT    = "FIT"  # FIT (contain, letterbox), STRETCH (exact box), FILL (cover, center-crop)
+VSLIDE_ROT    = 0      # slide content rotation inside the box: 0, 90, 180, 270
 
 # ── Calibration & Live Sightline Controls ────────────────────────────────────
 MIRROR_GAZE_X         = False    # Invert horizontal eye gaze tracking (toggle if robot eye looks opposite to you)
@@ -228,7 +230,7 @@ def load_calibration():
     global SWIPE_ANIMATION_ENABLED, GESTURE_COOLDOWN_SEC
     global FACE_CX_RATIO, FACE_CY_RATIO, FACE_SIZE, PIP_POS, PIP_SCALE
     global PIP_X, PIP_Y, PIP_CROP, SLIDE_ZOOM, SLIDE_X, SLIDE_Y
-    global VSLIDE_MODE, VSLIDE_SCALE, VSLIDE_X, VSLIDE_Y
+    global VSLIDE_MODE, VSLIDE_SCALE, VSLIDE_X, VSLIDE_Y, VSLIDE_FIT, VSLIDE_ROT
     if os.path.exists(CALIBRATION_FILE):
         try:
             with open(CALIBRATION_FILE, "r") as f:
@@ -285,6 +287,13 @@ def load_calibration():
             VSLIDE_SCALE = min(1.0, max(0.3, float(data.get("vslide_scale", VSLIDE_SCALE))))
             VSLIDE_X = min(1.0, max(0.0, float(data.get("vslide_x", VSLIDE_X))))
             VSLIDE_Y = min(1.0, max(0.0, float(data.get("vslide_y", VSLIDE_Y))))
+            _vf = str(data.get("vslide_fit", VSLIDE_FIT)).upper()
+            VSLIDE_FIT = _vf if _vf in ("FIT", "STRETCH", "FILL") else "FIT"
+            try:
+                _vr = int(data.get("vslide_rot", VSLIDE_ROT))
+                VSLIDE_ROT = _vr if _vr in (0, 90, 180, 270) else 0
+            except Exception:
+                pass
         except Exception:
             pass
 
@@ -338,6 +347,8 @@ def save_calibration():
         "vslide_scale": VSLIDE_SCALE,
         "vslide_x": VSLIDE_X,
         "vslide_y": VSLIDE_Y,
+        "vslide_fit": VSLIDE_FIT,
+        "vslide_rot": VSLIDE_ROT,
     }
     try:
         with open(CALIBRATION_FILE, "w") as f:

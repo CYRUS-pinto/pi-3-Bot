@@ -756,6 +756,19 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
   <div style="margin-bottom:8px;">
     <button id="btnVslide" onclick="toggleVslide()" style="width:100%; padding:10px 8px; font-size:11px; font-weight:bold;">📱 PORTRAIT SLIDES: OFF</button>
   </div>
+  <div style="font-size:11px; color:var(--muted); margin-bottom:6px;">CONTENT FIT:</div>
+  <div class="grid grid-3" style="margin-bottom:8px;">
+    <button id="vfitFIT" class="mint" onclick="setVslideFit('FIT')" style="padding:9px 8px; font-size:11px; font-weight:bold;">FIT</button>
+    <button id="vfitSTRETCH" onclick="setVslideFit('STRETCH')" style="padding:9px 8px; font-size:11px; font-weight:bold;">STRETCH</button>
+    <button id="vfitFILL" onclick="setVslideFit('FILL')" style="padding:9px 8px; font-size:11px; font-weight:bold;">FILL</button>
+  </div>
+  <div style="font-size:11px; color:var(--muted); margin-bottom:6px;">CONTENT ROTATION:</div>
+  <div class="grid grid-4" style="margin-bottom:8px;">
+    <button id="vrot0" class="mint" onclick="setVslideRot(0)" style="padding:9px 8px; font-size:11px; font-weight:bold;">0°</button>
+    <button id="vrot90" onclick="setVslideRot(90)" style="padding:9px 8px; font-size:11px; font-weight:bold;">90°</button>
+    <button id="vrot180" onclick="setVslideRot(180)" style="padding:9px 8px; font-size:11px; font-weight:bold;">180°</button>
+    <button id="vrot270" onclick="setVslideRot(270)" style="padding:9px 8px; font-size:11px; font-weight:bold;">270°</button>
+  </div>
   <div id="vslideCtl" style="display:none;">
     <div style="margin-bottom:8px;">
       <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;">
@@ -1490,6 +1503,20 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     updateVslideUI();
     layoutPost({vslide_mode: vslideOn}, vslideOn ? '📱 PORTRAIT COLUMN ON' : '🖥️ FULL SLIDES');
   }
+  function setVslideFit(mode) {
+    ['FIT','STRETCH','FILL'].forEach(m => {
+      const b = document.getElementById('vfit' + m);
+      if (b) b.className = (m === mode) ? 'mint' : '';
+    });
+    layoutPost({vslide_fit: mode}, '📱 FIT → ' + mode);
+  }
+  function setVslideRot(deg) {
+    [0, 90, 180, 270].forEach(d => {
+      const b = document.getElementById('vrot' + d);
+      if (b) b.className = (d === deg) ? 'mint' : '';
+    });
+    layoutPost({vslide_rot: deg}, '📱 ROTATE → ' + deg + '°');
+  }
   function updateVslideUI() {
     const b = document.getElementById('btnVslide');
     if (b) {
@@ -1515,6 +1542,18 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     if (c.slide_x !== undefined) { set('rngSlideX', c.slide_x * 100); calib_face_lbl('lblSlideX', c.slide_x * 100, '%'); }
     if (c.slide_y !== undefined) { set('rngSlideY', c.slide_y * 100); calib_face_lbl('lblSlideY', c.slide_y * 100, '%'); }
     if (c.vslide_mode !== undefined) { vslideOn = !!c.vslide_mode; updateVslideUI(); }
+    if (c.vslide_fit !== undefined) {
+      ['FIT','STRETCH','FILL'].forEach(m => {
+        const b = document.getElementById('vfit' + m);
+        if (b) b.className = (m === c.vslide_fit) ? 'mint' : '';
+      });
+    }
+    if (c.vslide_rot !== undefined) {
+      [0, 90, 180, 270].forEach(d => {
+        const b = document.getElementById('vrot' + d);
+        if (b) b.className = (d === c.vslide_rot) ? 'mint' : '';
+      });
+    }
     if (c.vslide_scale !== undefined) { set('rngVslideSize', c.vslide_scale * 100); calib_face_lbl('lblVslideSize', c.vslide_scale * 100, '%'); }
     if (c.vslide_x !== undefined) { set('rngVslideX', c.vslide_x * 100); calib_face_lbl('lblVslideX', c.vslide_x * 100, '%'); }
     if (c.vslide_y !== undefined) { set('rngVslideY', c.vslide_y * 100); calib_face_lbl('lblVslideY', c.vslide_y * 100, '%'); }
@@ -2583,6 +2622,8 @@ class WebRemoteHandler(BaseHTTPRequestHandler):
                     "vslide_scale": getattr(config, "VSLIDE_SCALE", 0.9),
                     "vslide_x": getattr(config, "VSLIDE_X", 0.5),
                     "vslide_y": getattr(config, "VSLIDE_Y", 0.5),
+                    "vslide_fit": getattr(config, "VSLIDE_FIT", "FIT"),
+                    "vslide_rot": getattr(config, "VSLIDE_ROT", 0),
                 }
             }
             self.send_response(200)
