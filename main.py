@@ -917,6 +917,9 @@ def main():
                     config.GESTURE_SENS_UP = float(payload["sens_up"])
                 if "sens_down" in payload:
                     config.GESTURE_SENS_DOWN = float(payload["sens_down"])
+                if "gesture_hand_size" in payload:
+                    config.GESTURE_HAND_SIZE = min(2.0, max(0.5, float(payload["gesture_hand_size"])))
+                    banner_items.append(f"HAND SIZE: {config.GESTURE_HAND_SIZE:.1f}x")
                 # ── Layout Studio: move/resize face + PiP live from the pocket remote ──
                 _layout_touched = False
                 if "face_cx" in payload:
@@ -1419,7 +1422,7 @@ def main():
                         _vrot = _vrot if _vrot in (0, 90, 180, 270) else 0
                         _vfit = str(getattr(config, "VSLIDE_FIT", "FIT")).upper()
                         _vfit = _vfit if _vfit in ("FIT", "STRETCH", "FILL") else "FIT"
-                        _vsc = min(1.0, max(0.3, float(getattr(config, "VSLIDE_SCALE", 0.9))))
+                        _vsc = min(1.5, max(0.2, float(getattr(config, "VSLIDE_SCALE", 0.9))))
                         _vrev = play.event_reveal_progress >= 1.0
                         _vk = (play.event_idx, round(_vsc, 3), _vfit, _vrot, _vrev,
                                int(getattr(config, "SLIDE_TEXT_REV", 0)))

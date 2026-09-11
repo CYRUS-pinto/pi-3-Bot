@@ -501,17 +501,19 @@ class OpticalGestureEngine:
         # ponytail: early-exit — total motion below min_hand_area means no contour can pass the area filter,
         # so skip MORPH_CLOSE + findContours (the expensive pair) and fall through with empty contours.
         # countNonZero is one SIMD pass. Falls through to the natural no-hand path (sweep eval on history still runs).
-        if cv2.countNonZero(motion_mask) < (gw * gh) * 0.005:
+        # Hand-size scaled (pocket remote: kids = smaller hands): threshold tracks the filter below exactly.
+        _hsz = max(0.5, min(2.0, float(getattr(config, "GESTURE_HAND_SIZE", 1.0))))
+        if cv2.countNonZero(motion_mask) < (gw * gh) * 0.005 * _hsz:
             contours = []
         else:
             # Morphological closing using cached kernel
             if self.kernel is not None:
                 motion_mask = cv2.morphologyEx(motion_mask, cv2.MORPH_CLOSE, self.kernel)
 
-            # 5. Find coherent moving hand contour in the interaction plane
-            contours, _ = cv2.findContours(motion_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        min_hand_area = (gw * gh) * 0.005  # ~0.5% of screen area
-        max_hand_area = (gw * gh) * getattr(config, "GESTURE_MAX_HAND_AREA", 0.085)  # Hands are compact <= 8.5%
+        # 5. Find coherent moving hand contour in the interaction plane
+        contours, _ = cv2.findContours(motion_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        min_hand_area = (gw * gh) * 0.005 * _hsz  # ~0.5% of screen area, hand-size scaled
+        max_hand_area = (gw * gh) * getattr(config, "GESTURE_MAX_HAND_AREA", 0.085) * _hsz
 
         best_cnt = None
         max_area = 0

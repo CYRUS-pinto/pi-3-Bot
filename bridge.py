@@ -25,6 +25,27 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 import pygame
 import config
 
+def _build_tag() -> str:
+    """Short content hash of the shipped code: shown in the remote footer so a stale
+    phone page or old Pi build can never be mistaken for current again."""
+    try:
+        import hashlib
+        h = hashlib.md5()
+        _here = os.path.dirname(os.path.abspath(__file__))
+        for _fn in ("main.py", "bridge.py", "vision.py", "config.py", "face.py"):
+            try:
+                with open(os.path.join(_here, _fn), "rb") as _f:
+                    h.update(_f.read())
+            except Exception:
+                pass
+        return h.hexdigest()[:8]
+    except Exception:
+        return "unknown"
+
+
+BUILD_TAG = _build_tag()
+
+
 def _build_test_wav() -> bytes:
     """Generates an ultra-clear, high-penetration 16-bit 48kHz stereo sci-fi chime WAV in memory.
     Tuned specifically for smartphone micro-transducers (1kHz-2.5kHz resonant peak)."""
@@ -646,6 +667,15 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
 
   <div style="margin-bottom:12px;">
     <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--muted); margin-bottom:2px;">
+      <span>✋ HAND SIZE (KIDS 0.6 / ADULTS 1.0–1.3)</span>
+      <span id="lblHandSize" style="color:var(--gold); font-weight:bold;">1.0x</span>
+    </div>
+    <input type="range" id="rngHandSize" min="0.5" max="2.0" step="0.1" value="1.0" oninput="onLayoutChangeHandSize()" style="width:100%; accent-color:var(--gold);">
+    <div style="font-size:9px; color:#555d6e; margin-top:2px;">CONTOUR SIZE WINDOW &bull; SMALLER HANDS NEED LOWER</div>
+  </div>
+
+  <div style="margin-bottom:12px;">
+    <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--muted); margin-bottom:2px;">
       <span>MASTER GESTURE SWIPE SENSITIVITY</span>
       <span id="lblGestureSens" style="color:var(--gold); font-weight:bold;">1.0x</span>
     </div>
@@ -996,6 +1026,7 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
 </div>
 
 <div class="status-bar" id="footerStatus">READY // TOUCH TO DISPATCH COMMAND</div>
+<div style="text-align:center; font-size:10px; color:var(--muted); padding:4px 0 10px;">BUILD BUILD_TAG — if this differs from the repo commit, hard-refresh (stale page)</div>
 
 <script>
   // ── Browser Security & Context Check ──────────────────────────────────────
@@ -1626,6 +1657,13 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
       const bf = document.getElementById('pipFREE');
       if (bf) bf.className = (c.pip_pos === 'FREE') ? 'mint' : '';
     }
+  }
+  function onLayoutChangeHandSize() {
+    const r = document.getElementById('rngHandSize');
+    const v = Math.min(2.0, Math.max(0.5, parseFloat(r.value) || 1.0));
+    const l = document.getElementById('lblHandSize');
+    if (l) l.textContent = v.toFixed(1) + 'x';
+    layoutPost({gesture_hand_size: v}, '✋ HAND SIZE → ' + v.toFixed(1) + 'x');
   }
   function calib_face_lbl(id, v, suffix) {
     const l = document.getElementById(id);
@@ -2569,6 +2607,12 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
         if (st.calibration.gesture_cooldown !== undefined) {
           updateCooldownUI(st.calibration.gesture_cooldown);
         }
+        if (st.calibration.gesture_hand_size !== undefined) {
+          const rhs = document.getElementById('rngHandSize');
+          if (rhs && document.activeElement !== rhs) rhs.value = st.calibration.gesture_hand_size;
+          const lhs = document.getElementById('lblHandSize');
+          if (lhs) lhs.textContent = Number(st.calibration.gesture_hand_size).toFixed(1) + 'x';
+        }
         if (st.calibration.swipe_anim_enabled !== undefined) {
           updateSwipeAnimButton(st.calibration.swipe_anim_enabled);
         }
@@ -2720,7 +2764,9 @@ class WebRemoteHandler(BaseHTTPRequestHandler):
     def do_HEAD(self):
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
         self.end_headers()
 
     def do_GET(self):
@@ -2728,9 +2774,13 @@ class WebRemoteHandler(BaseHTTPRequestHandler):
         if path_clean in ("/", "/index.html"):
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Cache-Control", "no-cache")
+            # ponytail: stale phone pages caused real misdiagnoses (zoom "dead" = cached JS).
+            # no-store + build tag in footer ends that class of confusion permanently.
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
             self.end_headers()
-            self.wfile.write(WEB_REMOTE_HTML.encode("utf-8"))
+            self.wfile.write(WEB_REMOTE_HTML.replace("BUILD_TAG", BUILD_TAG).encode("utf-8"))
         elif path_clean == "/stream.mjpg":
             from vision import get_latest_stream_frame, notify_stream_active
             notify_stream_active()
@@ -2852,6 +2902,7 @@ class WebRemoteHandler(BaseHTTPRequestHandler):
                     "sens_x": config.GAZE_SENSITIVITY_X,
                     "sens_y": config.GAZE_SENSITIVITY_Y,
                     "gesture_sens": getattr(config, "GESTURE_SWIPE_SENSITIVITY", 1.0),
+                    "gesture_hand_size": getattr(config, "GESTURE_HAND_SIZE", 1.0),
                     "sens_left": getattr(config, "GESTURE_SENS_LEFT", 1.0),
                     "sens_right": getattr(config, "GESTURE_SENS_RIGHT", 1.0),
                     "sens_up": getattr(config, "GESTURE_SENS_UP", 1.0),

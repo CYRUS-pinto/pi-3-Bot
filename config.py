@@ -142,6 +142,7 @@ VSLIDE_FIT    = "FIT"  # FIT (contain, letterbox), STRETCH (exact box), FILL (co
 VSLIDE_ROT    = 0      # slide content rotation inside the box: 0, 90, 180, 270
 SLIDE_TEXT    = {}     # pocket-remote text overrides: {index-str: {name, desc}}; length-capped at apply
 SLIDE_TEXT_REV = 0     # bumped on every text edit so cached statics rebuild
+GESTURE_HAND_SIZE = 1.0  # hand-size scale for every-user accuracy (kids ~0.6, adults ~1.0-1.3); remote slider
 
 # ── Calibration & Live Sightline Controls ────────────────────────────────────
 MIRROR_GAZE_X         = False    # Invert horizontal eye gaze tracking (toggle if robot eye looks opposite to you)
@@ -233,7 +234,7 @@ def load_calibration():
     global FACE_CX_RATIO, FACE_CY_RATIO, FACE_SIZE, PIP_POS, PIP_SCALE
     global PIP_X, PIP_Y, PIP_CROP, SLIDE_ZOOM, SLIDE_X, SLIDE_Y
     global VSLIDE_MODE, VSLIDE_SCALE, VSLIDE_X, VSLIDE_Y, VSLIDE_FIT, VSLIDE_ROT
-    global SLIDE_TEXT, SLIDE_TEXT_REV
+    global SLIDE_TEXT, SLIDE_TEXT_REV, GESTURE_HAND_SIZE
     if os.path.exists(CALIBRATION_FILE):
         try:
             with open(CALIBRATION_FILE, "r") as f:
@@ -314,6 +315,7 @@ def load_calibration():
                 SLIDE_TEXT_REV = int(data.get("slide_text_rev", SLIDE_TEXT_REV))
             except Exception:
                 pass
+            GESTURE_HAND_SIZE = min(2.0, max(0.5, float(data.get("gesture_hand_size", GESTURE_HAND_SIZE))))
         except Exception:
             pass
 
@@ -371,6 +373,7 @@ def save_calibration():
         "vslide_rot": VSLIDE_ROT,
         "slide_text": {k: dict(v) for k, v in SLIDE_TEXT.items()},
         "slide_text_rev": SLIDE_TEXT_REV,
+        "gesture_hand_size": GESTURE_HAND_SIZE,
     }
     try:
         with open(CALIBRATION_FILE, "w") as f:
