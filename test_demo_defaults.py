@@ -20,16 +20,17 @@ assert config.IDLE_RENDER_FPS <= 10, config.IDLE_RENDER_FPS  # empty-room standb
 assert 0.10 <= config.GESTURE_WALK_LOCKOUT_SPEED <= 0.16, config.GESTURE_WALK_LOCKOUT_SPEED
 assert config.GESTURE_WALK_DEBOUNCE_SEC <= 1.5, config.GESTURE_WALK_DEBOUNCE_SEC
 
-# Layout Studio defaults reproduce the exact shipped look.
-assert abs(config.FACE_SIZE - 1.0) < 1e-9, config.FACE_SIZE
-assert abs(config.FACE_CX_RATIO - 0.5) < 1e-9, config.FACE_CX_RATIO
-assert config.FACE_CY_RATIO is None, config.FACE_CY_RATIO
-assert config.PIP_POS == "BR", config.PIP_POS
-assert abs(config.PIP_SCALE - 1.0) < 1e-9, config.PIP_SCALE
-assert abs(config.PIP_X - 1.0) < 1e-9 and abs(config.PIP_Y - 1.0) < 1e-9
-assert list(config.PIP_CROP) == [0.0, 0.0, 1.0, 1.0], config.PIP_CROP
-assert abs(config.SLIDE_ZOOM - 1.0) < 1e-9, config.SLIDE_ZOOM
-assert abs(config.SLIDE_X - 0.5) < 1e-9 and abs(config.SLIDE_Y - 0.5) < 1e-9
+# Layout Studio values are user-tunable from the remote: assert VALIDITY (ranges/membership),
+# not equality — the pocket remote legitimately rewrites these (Pi reported FREE = user dragged it).
+assert 0.4 <= config.FACE_SIZE <= 2.0, config.FACE_SIZE
+assert 0.1 <= config.FACE_CX_RATIO <= 0.9, config.FACE_CX_RATIO
+assert config.FACE_CY_RATIO is None or 0.1 <= config.FACE_CY_RATIO <= 0.9
+assert config.PIP_POS in ("TR", "TL", "BR", "BL", "FREE"), config.PIP_POS
+assert 0.3 <= config.PIP_SCALE <= 1.5, config.PIP_SCALE
+assert 0.0 <= config.PIP_X <= 1.0 and 0.0 <= config.PIP_Y <= 1.0
+assert len(list(config.PIP_CROP)) == 4, config.PIP_CROP
+assert 0.5 <= config.SLIDE_ZOOM <= 1.0, config.SLIDE_ZOOM
+assert 0.0 <= config.SLIDE_X <= 1.0 and 0.0 <= config.SLIDE_Y <= 1.0
 
 # Shipped calibration file must carry the demo keys (values may be user-toggled at runtime).
 cal = json.load(open("calibration.json"))
