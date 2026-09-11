@@ -1,0 +1,9 @@
+# TARS: when the mini phone (re)connects over USB, bring up tethering IP automatically.
+# Install once: sudo cp 99-tars-tether.rules /etc/udev/rules.d/ && sudo udevadm control --reload-rules
+# NOTE (phone side, no code can fix this): Android turns USB tethering OFF on reboot.
+# On the mini phone set Default USB configuration to USB tethering (Developer options),
+# or use MacroDroid/Tasker to re-enable tethering on boot + on USB connect. Without that,
+# the Pi end will wait forever for a phone that never shares.
+ACTION=="add", SUBSYSTEM=="net", ENV{ID_USB_DRIVER}=="rndis_host", RUN+="/home/cyrus/TARS/tars-tether.sh $env{INTERFACE}"
+ACTION=="add", SUBSYSTEM=="net", ENV{ID_USB_DRIVER}=="cdc_ether", RUN+="/home/cyrus/TARS/tars-tether.sh $env{INTERFACE}"
+ACTION=="add", SUBSYSTEM=="net", KERNEL=="usb*", ENV{ID_NET_DRIVER}=="rndis_host", RUN+="/home/cyrus/TARS/tars-tether.sh $env{INTERFACE}"

@@ -1,0 +1,22 @@
+# TARS autostart: Pi boots straight into the robot display. Install once:
+#   sudo cp tars.service /etc/systemd/system/ && sudo systemctl enable --now tars
+# If the screen stays black on cold boot, enable console autologin once
+# (sudo raspi-config -> System -> Boot -> Console Autologin): KMS needs an
+# active VT, and autologin guarantees one exists before this unit starts.
+[Unit]
+Description=TARS robot display (KMSDRM)
+After=network-online.target getty@tty1.service
+Wants=network-online.target
+
+[Service]
+User=cyrus
+WorkingDirectory=/home/cyrus/TARS
+Environment=SDL_VIDEODRIVER=kmsdrm
+Environment=SDL_AUDIODRIVER=dummy
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /home/cyrus/TARS/main.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

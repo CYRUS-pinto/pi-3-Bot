@@ -49,7 +49,8 @@ E_THINKING  = E_CONFIDENT
 E_SKEPTICAL = E_WARM
 
 # ── Screen Orientation (Auto-detects or force "PORTRAIT" / "LANDSCAPE") ───────
-SCREEN_ORIENTATION = "PORTRAIT"  # ponytail: locked — boxed vertical bot; AUTO rebuilds all 6 event cards on every resize
+SCREEN_ORIENTATION = "AUTO"  # ponytail: rig changes (horizontal Dell now, vertical later) — layouts branch per
+# orientation everywhere; lock only if one form becomes permanent. Resize rebuilds are rare (R key).
 
 # ── Face geometry — Landscape (Horizontal / TV / Laptop) ─────────────────────
 EYE_W_RATIO   = 0.120    # eye width / screen width
