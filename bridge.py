@@ -200,6 +200,14 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
   .grid-2 { grid-template-columns: 1fr 1fr; }
   .grid-3 { grid-template-columns: 1fr 1fr 1fr; }
   .grid-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+  .lbox { position: absolute; border: 2px solid; border-radius: 6px;
+    background: rgba(10, 14, 20, 0.35); box-sizing: border-box; touch-action: none; }
+  .lboxLabel { position: absolute; top: 2px; left: 5px; font-size: 9px;
+    font-weight: bold; letter-spacing: 1px; pointer-events: none; }
+  .lhandle { position: absolute; right: -9px; bottom: -9px; width: 22px; height: 22px;
+    background: var(--panel); border: 2px solid var(--text); border-radius: 50%;
+    touch-action: none; font-size: 9px; color: var(--text); }
+  .lhandle::after { content: "◢"; position: absolute; left: 4px; top: 1px; }
 
   button {
     background: var(--panel);
@@ -680,6 +688,31 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
       🔄 RESET DEFAULTS
     </button>
   </div>
+</div>
+
+<!-- 🎨 LAYOUT CANVAS — Paint-style direct manipulation: drag bodies to move, drag ◢ to resize -->
+<div style="background:#0d1117; border:1px solid var(--border); border-radius:12px; padding:12px; margin-bottom:14px;">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+    <div style="font-size:11px; font-weight:bold; letter-spacing:1.5px; color:var(--gold); display:flex; align-items:center; gap:6px;">
+      <span style="font-size:13px;">🎨</span> LAYOUT CANVAS
+    </div>
+    <div style="font-size:10px; color:var(--muted);">DRAG BOXES • ◢ RESIZES</div>
+  </div>
+  <div id="layoutCanvas" style="position:relative; width:100%; aspect-ratio:16/9; background:#05070a; border:1px solid var(--border); border-radius:8px; overflow:hidden; touch-action:none; background-image:linear-gradient(rgba(75,215,255,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(75,215,255,0.06) 1px, transparent 1px); background-size:10% 10%;">
+    <div id="boxSlide" class="lbox" style="border-color:#38eb91;">
+      <span class="lboxLabel" style="color:#38eb91;">SLIDE</span>
+      <div class="lhandle" data-box="boxSlide"></div>
+    </div>
+    <div id="boxFace" class="lbox" style="border-color:var(--gold);">
+      <span class="lboxLabel" style="color:var(--gold);">FACE</span>
+      <div class="lhandle" data-box="boxFace"></div>
+    </div>
+    <div id="boxCam" class="lbox" style="border-color:var(--cyan);">
+      <span class="lboxLabel" style="color:var(--cyan);">CAM</span>
+      <div class="lhandle" data-box="boxCam"></div>
+    </div>
+  </div>
+  <div style="font-size:10px; color:var(--muted); margin-top:6px;">Boxes mirror TV layout — look at the TV while you drag. Sliders below fine-tune.</div>
 </div>
 
 <!-- 🎛️ LAYOUT STUDIO — move/resize face + camera box freely, changes apply live -->
@@ -1571,6 +1604,133 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     if (l) l.textContent = Math.round(v) + suffix;
   }
 
+  // 🎨 Layout Canvas — Paint-style direct manipulation (Pointer Events: mouse + touch)
+  const LC = {drag: null, lastPost: 0};
+  function lcGeom(id) {
+    const el = document.getElementById(id);
+    return {
+      x: parseFloat(el.style.left) / 100 || 0,
+      y: parseFloat(el.style.top) / 100 || 0,
+      w: parseFloat(el.style.width) / 100 || 0.2,
+      h: parseFloat(el.style.height) / 100 || 0.2
+    };
+  }
+  function lcSet(id, g) {
+    const el = document.getElementById(id);
+    el.style.left = (g.x * 100) + '%';
+    el.style.top = (g.y * 100) + '%';
+    el.style.width = (g.w * 100) + '%';
+    el.style.height = (g.h * 100) + '%';
+  }
+  function lcPost(id, final) {
+    const g = lcGeom(id);
+    const now = Date.now();
+    if (!final && now - LC.lastPost < 250) return;
+    LC.lastPost = now;
+    const clamp01 = (v) => Math.min(1, Math.max(0, v));
+    if (id === 'boxFace') {
+      layoutPost({face_cx: +clamp01(g.x + g.w / 2).toFixed(3),
+        face_cy: +clamp01(g.y + g.h / 2).toFixed(3),
+        face_size: +Math.min(2, Math.max(0.4, g.h / 0.45)).toFixed(2)});
+    } else if (id === 'boxCam') {
+      layoutPost({pip_pos: 'FREE',
+        pip_x: +(g.w >= 1 ? 1 : g.x / Math.max(0.01, 1 - g.w)).toFixed(3),
+        pip_y: +(g.h >= 1 ? 1 : g.y / Math.max(0.01, 1 - g.h)).toFixed(3),
+        pip_scale: +Math.min(1.5, Math.max(0.3, g.w / 0.34)).toFixed(2)});
+    } else if (id === 'boxSlide') {
+      if (vslideOn) {
+        layoutPost({vslide_scale: +Math.min(1, Math.max(0.3, g.h)).toFixed(2),
+          vslide_x: +(g.w >= 1 ? 0.5 : g.x / Math.max(0.01, 1 - g.w)).toFixed(3),
+          vslide_y: +(g.h >= 1 ? 0.5 : g.y / Math.max(0.01, 1 - g.h)).toFixed(3)});
+      } else {
+        layoutPost({slide_zoom: +Math.min(1, Math.max(0.5, g.w)).toFixed(2),
+          slide_x: +(g.w >= 1 ? 0.5 : g.x / Math.max(0.01, 1 - g.w)).toFixed(3),
+          slide_y: +(g.h >= 1 ? 0.5 : g.y / Math.max(0.01, 1 - g.h)).toFixed(3)});
+      }
+    }
+    if (final) showToast('🎨 LAYOUT APPLIED');
+  }
+  function lcInitBoxes(c) {
+    if (!c || LC.drag) return;
+    const fx = (c.face_cx !== undefined) ? c.face_cx : 0.5;
+    const fy = (c.face_cy !== undefined && c.face_cy !== null) ? c.face_cy : 0.44;
+    const fs = (c.face_size !== undefined) ? c.face_size : 1.0;
+    const fh = Math.min(0.95, 0.45 * fs);
+    lcSet('boxFace', {x: Math.min(0.95 - fh, Math.max(0, fx - fh / 2)), y: Math.min(0.95 - fh * 0.75, Math.max(0, fy - fh * 0.375)), w: fh, h: fh * 0.75});
+    const sc = (c.pip_scale !== undefined) ? c.pip_scale : 1.0;
+    const bw = Math.min(0.9, 0.34 * sc), bh = bw * 0.75;
+    let bx = 1 - bw, by = 1 - bh;
+    if (c.pip_pos === 'FREE') {
+      bx = (c.pip_x || 1) * (1 - bw); by = (c.pip_y || 1) * (1 - bh);
+    } else if (c.pip_pos === 'TL') { bx = 0; by = 0; }
+    else if (c.pip_pos === 'TR') { bx = 1 - bw; by = 0; }
+    else if (c.pip_pos === 'BL') { bx = 0; by = 1 - bh; }
+    lcSet('boxCam', {x: bx, y: by, w: bw, h: bh});
+    if (vslideOn) {
+      const vh = (c.vslide_scale || 0.9), vw = vh * 0.316;
+      const vx = (c.vslide_x || 0.5) * (1 - vw), vy = (c.vslide_y || 0.5) * (1 - vh);
+      lcSet('boxSlide', {x: vx, y: vy, w: vw, h: vh});
+    } else {
+      const zw = (c.slide_zoom !== undefined) ? c.slide_zoom : 1.0;
+      const sx = (c.slide_x !== undefined) ? c.slide_x : 0.5;
+      const sy = (c.slide_y !== undefined) ? c.slide_y : 0.5;
+      lcSet('boxSlide', {x: sx * (1 - zw), y: sy * (1 - zw), w: zw, h: zw});
+    }
+  }
+  function lcAspect(rot) {
+    const cv = document.getElementById('layoutCanvas');
+    if (cv) cv.style.aspectRatio = (rot === 90 || rot === 270) ? '9/16' : '16/9';
+  }
+  (function lcBind() {
+    const cv = document.getElementById('layoutCanvas');
+    if (!cv) return;
+    const pos = (e) => {
+      const r = cv.getBoundingClientRect();
+      const t = (e.touches && e.touches[0]) || e;
+      return {x: (t.clientX - r.left) / r.width, y: (t.clientY - r.top) / r.height};
+    };
+    cv.querySelectorAll('.lbox').forEach(box => {
+      box.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        const p = pos(e);
+        const g = lcGeom(box.id);
+        LC.drag = {id: box.id, mode: 'move', dx: p.x - g.x, dy: p.y - g.y};
+        try { box.setPointerCapture(e.pointerId); } catch (_) {}
+      });
+    });
+    cv.querySelectorAll('.lhandle').forEach(h => {
+      h.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const g = lcGeom(h.dataset.box);
+        LC.drag = {id: h.dataset.box, mode: 'size', g0: g};
+        try { h.setPointerCapture(e.pointerId); } catch (_) {}
+      });
+    });
+    const move = (e) => {
+      if (!LC.drag) return;
+      e.preventDefault();
+      const p = pos(e);
+      const g = lcGeom(LC.drag.id);
+      if (LC.drag.mode === 'move') {
+        g.x = Math.min(1 - g.w, Math.max(0, p.x - LC.drag.dx));
+        g.y = Math.min(1 - g.h, Math.max(0, p.y - LC.drag.dy));
+      } else {
+        g.w = Math.min(1 - g.x, Math.max(0.08, p.x - g.x));
+        g.h = Math.min(1 - g.y, Math.max(0.08, p.y - g.y));
+      }
+      lcSet(LC.drag.id, g);
+      lcPost(LC.drag.id, false);
+    };
+    const up = (e) => {
+      if (!LC.drag) return;
+      lcPost(LC.drag.id, true);
+      LC.drag = null;
+    };
+    cv.addEventListener('pointermove', move);
+    cv.addEventListener('pointerup', up);
+    cv.addEventListener('pointercancel', up);
+  })();
+
   function toggleGestureMirror() {
     toggleMirrorGesture();
   }
@@ -2320,8 +2480,10 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
         if (st.calibration.screen_rotation !== undefined) {
           currentScreenRot = st.calibration.screen_rotation;
           syncRotButtons(currentScreenRot);
+          lcAspect(currentScreenRot);
         }
         syncLayoutUI(st.calibration);
+        lcInitBoxes(st.calibration);
       }
       const lmb = document.getElementById('lmBadge');
       if (lmb) {
