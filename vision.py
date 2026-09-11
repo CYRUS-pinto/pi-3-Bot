@@ -35,6 +35,71 @@ try:
 except ImportError:
     HAS_CV2 = False
 
+# ponytail: MediaPipe is OPTIONAL — motion pipeline works fully without it.
+# Install on Pi for landmark-confirmed swipes: pip install mediapipe, then place the
+# lite model at models/hand_landmarker.task
+# (https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task)
+try:
+    from mediapipe.tasks.python import vision as _mp_vision
+    from mediapipe.tasks.python import base_options as _mp_base
+    import mediapipe as _mp
+    HAS_MEDIAPIPE = True
+except ImportError:
+    HAS_MEDIAPIPE = False
+
+
+def hand_is_open(pts) -> bool:
+    """Pure open-hand test on 21 normalized (x, y) landmarks (y grows downward).
+    True when ANY of index/middle/ring is extended (tip clearly above its PIP joint).
+    Pointing counts (index only); fist/sleeve-blob counts as closed. No model needed."""
+    try:
+        ext = 0
+        for tip, pip in ((8, 6), (12, 10), (16, 14)):
+            if pts[tip][1] < pts[pip][1] - 0.02:
+                ext += 1
+        return ext >= 1
+    except Exception:
+        return False
+
+
+class HandConfirm:
+    """Lazy MediaPipe HandLandmarker wrapper. Missing lib/model => disabled (fail-open).
+    Call sense() at most every Nth AI frame; it returns (tip_x, tip_y, is_open) or None."""
+
+    def __init__(self, model_path: str | None = None):
+        self.ok = False
+        self._lm = None
+        if not HAS_MEDIAPIPE or not model_path or not os.path.exists(model_path):
+            return
+        try:
+            opts = _mp_vision.HandLandmarkerOptions(
+                base_options=_mp_base.BaseOptions(model_asset_path=model_path),
+                running_mode=_mp_vision.RunningMode.VIDEO,
+                num_hands=1,
+                min_hand_detection_confidence=0.5,
+                min_hand_presence_confidence=0.5,
+                min_tracking_confidence=0.5)
+            self._lm = _mp_vision.HandLandmarker.create_from_options(opts)
+            self.ok = True
+        except Exception:
+            self._lm = None
+            self.ok = False
+
+    def sense(self, bgr_small, now_ms: int):
+        if not self.ok:
+            return None
+        try:
+            rgb = cv2.cvtColor(bgr_small, cv2.COLOR_BGR2RGB)
+            img = _mp.Image(image_format=_mp.ImageFormat.SRGB, data=rgb)
+            res = self._lm.detect_for_video(img, int(now_ms))
+            if not res.hand_landmarks:
+                return None
+            lm = res.hand_landmarks[0]
+            pts = [(p.x, p.y) for p in lm]
+            return (lm[8].x, lm[8].y, hand_is_open(pts))
+        except Exception:
+            return None
+
 
 ACTIVE_TRACKER: UniversalVisionTracker | None = None
 LAST_STREAM_POLL = time.time()
@@ -868,6 +933,20 @@ class UniversalVisionTracker:
         self.is_presenter_walking = False
         self.latest_gesture = ""
         self.gesture_engine = OpticalGestureEngine() if HAS_CV2 else None
+        # Landmark confirmer (optional): model lives next to the YuNet one; missing => fail-open.
+        self._landmarks = None
+        self._last_open = (False, 0.0)  # (is_open, monotonic ts)
+        self._lm_tick = 0
+        if HAS_CV2:
+            for _mp in (
+                os.path.join(os.path.dirname(__file__), "models", "hand_landmarker.task"),
+                "/home/cyrus/TARS/models/hand_landmarker.task",
+            ):
+                if os.path.exists(_mp):
+                    self._landmarks = HandConfirm(_mp)
+                    if self._landmarks.ok:
+                        break
+                    self._landmarks = None
 
         # Pre-encode standby placeholder so /snapshot.jpg never 503s on startup
         if HAS_CV2:
@@ -1160,15 +1239,30 @@ class UniversalVisionTracker:
 
             # 3. Optical Hand Tracking & Gesture Recognition (re-uses `small` with ZERO resize overhead!)
             t_gest_0 = time.perf_counter()
+            # Landmark refresh: every 3rd frame, never in standby (nothing to confirm, save the heat).
+            # ponytail: fail-open — no model, no landmarks, stale result => motion pipeline decides alone, as today.
+            if self._landmarks is not None and self._landmarks.ok and not self.is_low_power:
+                self._lm_tick += 1
+                if self._lm_tick % 3 == 0:
+                    _lr = self._landmarks.sense(small, time.monotonic_ns() // 1_000_000)
+                    if _lr is not None:
+                        self._last_open = (_lr[2], time.monotonic())
+                        self.hand_tip = (_lr[0], _lr[1])  # steadier marker than the motion centroid
             if self.gesture_engine is not None and config.GESTURE_SWIPE_ENABLED:
                 try:
                     f_boxes = [d["box"] for d in detected_faces]
                     gesture = self.gesture_engine.process(frame, face_boxes=f_boxes, pre_small=small)
                     self.hand_detected = self.gesture_engine.hand_detected
                     self.hand_box = self.gesture_engine.hand_box
-                    self.hand_tip = getattr(self.gesture_engine, "hand_tip", (0.5, 0.5))
+                    # hand_tip: landmark tip when fresh (set above), else motion centroid.
+                    if self._landmarks is None or time.monotonic() - self._last_open[1] > 5.0:
+                        self.hand_tip = getattr(self.gesture_engine, "hand_tip", (0.5, 0.5))
                     self.is_presenter_walking = getattr(self.gesture_engine, "is_presenter_walking", False)
-                    if gesture:
+                    _open_ok = True
+                    if self._landmarks is not None and self._landmarks.ok:
+                        _is_open, _ts = self._last_open
+                        _open_ok = bool(_is_open) and (time.monotonic() - _ts) <= 0.6
+                    if gesture and _open_ok:
                         self.latest_gesture = gesture
                         if gesture == "SWIPE_RIGHT":
                             step_dir = "next"
@@ -1213,6 +1307,7 @@ class UniversalVisionTracker:
                     "camera_src": str(getattr(self._grabber, "src", "none")),
                     "faces": len(detected_faces),
                     "hand_active": self.hand_detected,
+                    "landmarks": bool(self._landmarks is not None and self._landmarks.ok),
                     "low_power": self.is_low_power,
                     "temp_c": thermal["temp_c"],
                     "throttled": thermal["throttled"],
