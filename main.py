@@ -549,6 +549,7 @@ def main():
     _strip_static = None
     _strip_static_key = None
     _strip_static_prev = None  # ponytail: previous slide's static — reveal sweeps new over old, both hi-res
+    _strip_build_frame = -1000000  # last static build frame (zoom drags throttle to 2Hz)
     _strip_face_key = None
     _strip_face_surf = None
     _strip_face_xy = (0, 0)
@@ -559,12 +560,13 @@ def main():
     _strip_pip_tag_key = None
 
     def _strip_reset():
-        nonlocal _strip_static, _strip_static_key, _strip_static_prev
+        nonlocal _strip_static, _strip_static_key, _strip_static_prev, _strip_build_frame
         nonlocal _strip_face_key, _strip_face_surf
         nonlocal _strip_clock_key, _strip_clock_surf, _strip_pip_tag, _strip_pip_tag_key
         _strip_static = None
         _strip_static_key = None
         _strip_static_prev = None
+        _strip_build_frame = -1000000
         _strip_face_key = None
         _strip_face_surf = None
         _strip_clock_key = ""
@@ -930,7 +932,9 @@ def main():
                     _layout_touched = True
                 if _layout_touched:
                     renderer.face._invalidate()  # recompute geometry next draw; strip cache re-keys on rect
-                    banner_items.append("LAYOUT UPDATED")
+                    # ponytail: NO banner for layout drags — banners force the full pipeline for 2s,
+                    # hiding zoom/position changes while adjusting (user: "slide does not work").
+                    # Phone slider labels already confirm each drag; static key rebuilds live.
                 config.save_calibration()
                 if banner_items:
                     last_gesture_banner = f"[{' // '.join(banner_items)}]"
@@ -1179,7 +1183,15 @@ def main():
                          round(min(1.0, max(0.5, float(getattr(config, "SLIDE_ZOOM", 1.0)))), 3),
                          round(min(1.0, max(0.0, float(getattr(config, "SLIDE_X", 0.5)))), 3),
                          round(min(1.0, max(0.0, float(getattr(config, "SLIDE_Y", 0.5)))), 3))
-                if _skey != _strip_static_key:
+                # ponytail: zoom drags re-post every tick; a 45ms rebuild per tick would stutter
+                # the drag itself. Structural changes rebuild now; zoom-only re-renders at most 2Hz.
+                _struct_new, _zoom_new = _skey[:7], _skey[7:]
+                _struct_old = _strip_static_key[:7] if _strip_static_key else None
+                _zoom_old = _strip_static_key[7:] if _strip_static_key else None
+                _need_now = (_struct_new != _struct_old) or (
+                    _zoom_new != _zoom_old and (frame_no - _strip_build_frame) >= 15)
+                if _need_now:
+                    _strip_build_frame = frame_no
                     _strip_static_prev = _strip_static
                     # base: bg smooth-upscaled once (flat void/vignette upscale cleanly)
                     pygame.transform.smoothscale(renderer._bg, (sc_w, sc_h), sc_canvas)
