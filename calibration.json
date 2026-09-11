@@ -47,5 +47,7 @@
   "vslide_x": 0.5,
   "vslide_y": 0.5,
   "vslide_fit": "FIT",
-  "vslide_rot": 0
+  "vslide_rot": 0,
+  "slide_text": {},
+  "slide_text_rev": 0
 }

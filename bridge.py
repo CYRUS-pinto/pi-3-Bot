@@ -459,6 +459,17 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     <button onclick="selectSlide(4)" style="padding:8px; font-size:11px;">#5 KARTKRAFT</button>
     <button onclick="selectSlide(5)" style="padding:8px; font-size:11px;">#6 MINDFORGE</button>
   </div>
+  <div style="font-size:10px; color:var(--muted); letter-spacing:1px; margin:8px 0 4px 2px;">✏️ REWRITE CURRENT SLIDE TEXT (LIVE):</div>
+  <div style="margin-bottom:8px;">
+    <input id="slideNameIn" type="text" maxlength="60" placeholder="Slide title (empty = keep)"
+      style="width:100%; padding:10px 8px; margin-bottom:6px; background:#161b22; border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:13px;">
+    <textarea id="slideDescIn" rows="2" maxlength="300" placeholder="Slide description (empty = keep)"
+      style="width:100%; padding:10px 8px; background:#161b22; border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:12px;"></textarea>
+  </div>
+  <div class="grid grid-2" style="margin-bottom:8px;">
+    <button onclick="saveSlideText()" class="mint" style="padding:10px 8px; font-size:11px; font-weight:bold;">✏️ APPLY TO CURRENT SLIDE</button>
+    <button onclick="clearSlideText()" style="padding:10px 8px; font-size:11px; font-weight:bold;">↩ RESTORE ORIGINAL</button>
+  </div>
 
   <!-- Optical Swipe & Touch Navigation -->
   <div style="display:flex; justify-content:space-between; align-items:center; margin:10px 0 6px 2px;">
@@ -699,6 +710,7 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     <div style="font-size:10px; color:var(--muted);">DRAG BOXES • ◢ RESIZES</div>
   </div>
   <div id="layoutCanvas" style="position:relative; width:100%; aspect-ratio:16/9; background:#05070a; border:1px solid var(--border); border-radius:8px; overflow:hidden; touch-action:none; background-image:linear-gradient(rgba(75,215,255,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(75,215,255,0.06) 1px, transparent 1px); background-size:10% 10%;">
+    <div id="aimDot" style="position:absolute; width:10px; height:10px; margin:-5px 0 0 -5px; border-radius:50%; background:radial-gradient(circle, #ffd75f 30%, transparent 70%); pointer-events:none; display:none;"></div>
     <div id="boxSlide" class="lbox" style="border-color:#38eb91;">
       <span class="lboxLabel" style="color:#38eb91;">SLIDE</span>
       <div class="lhandle" data-box="boxSlide"></div>
@@ -707,7 +719,8 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
       <span class="lboxLabel" style="color:var(--gold);">FACE</span>
       <div class="lhandle" data-box="boxFace"></div>
     </div>
-    <div id="boxCam" class="lbox" style="border-color:var(--cyan);">
+    <div id="boxCam" class="lbox" style="border-color:var(--cyan); overflow:hidden;">
+      <img id="camThumb" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0.55; pointer-events:none;" alt="">
       <span class="lboxLabel" style="color:var(--cyan);">CAM</span>
       <div class="lhandle" data-box="boxCam"></div>
     </div>
@@ -744,7 +757,7 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;">
       <span>🔍 FACE SIZE</span><span id="lblFaceSize" style="color:var(--text); font-weight:bold;">100%</span>
     </div>
-    <input type="range" id="rngFaceSize" min="40" max="200" step="5" value="100" oninput="onLayoutChange()" style="width:100%; accent-color:var(--gold);">
+    <input type="range" id="rngFaceSize" min="20" max="400" step="5" value="100" oninput="onLayoutChange()" style="width:100%; accent-color:var(--gold);">
   </div>
   <div style="font-size:11px; color:var(--muted); margin-bottom:6px;">📹 CAMERA BOX CORNER</div>
   <div class="grid grid-4" style="margin-bottom:8px;">
@@ -772,7 +785,7 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;">
       <span>📹 CAMERA BOX SIZE</span><span id="lblPipSize" style="color:var(--text); font-weight:bold;">100%</span>
     </div>
-    <input type="range" id="rngPipSize" min="30" max="150" step="5" value="100" oninput="onLayoutChange()" style="width:100%; accent-color:var(--cyan);">
+    <input type="range" id="rngPipSize" min="10" max="300" step="5" value="100" oninput="onLayoutChange()" style="width:100%; accent-color:var(--cyan);">
   </div>
   <div style="font-size:11px; color:var(--muted); margin-bottom:6px;">✂️ CAMERA CROP (cut ceiling/floor: X / Y / W / H %)</div>
   <div class="grid grid-4" style="margin-bottom:10px;">
@@ -785,7 +798,7 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;">
       <span>🖥️ SLIDE ZOOM</span><span id="lblZoom" style="color:var(--text); font-weight:bold;">100%</span>
     </div>
-    <input type="range" id="rngZoom" min="50" max="100" step="1" value="100" oninput="onLayoutChange()" style="width:100%; accent-color:var(--gold);">
+    <input type="range" id="rngZoom" min="30" max="200" step="1" value="100" oninput="onLayoutChange()" style="width:100%; accent-color:var(--gold);">
   </div>
   <div class="grid grid-2" style="margin-bottom:8px;">
     <div><div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;"><span>🖥️ SLIDE X</span><span id="lblSlideX" style="color:var(--text); font-weight:bold;">50%</span></div><input type="range" id="rngSlideX" min="0" max="100" step="1" value="50" oninput="onLayoutChange()" style="width:100%; accent-color:var(--gold);"></div>
@@ -1608,6 +1621,11 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     const l = document.getElementById(id);
     if (l) l.textContent = Math.round(v) + suffix;
   }
+  // Live mirror: camera thumbnail inside the CAM box + tracking crosshair (view-only, never moves boxes)
+  setInterval(() => {
+    const img = document.getElementById('camThumb');
+    if (img && document.visibilityState === 'visible') img.src = '/snapshot.jpg?t=' + Date.now();
+  }, 2000);
   function resetBoxFace() {
     lcSet('boxFace', {x: 0.275, y: 0.2575, w: 0.45, h: 0.3375});
     document.getElementById('rngFaceX').value = 50;
@@ -1649,25 +1667,27 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     const now = Date.now();
     if (!final && now - LC.lastPost < 250) return;
     LC.lastPost = now;
+    // ponytail: Paint has canvas edges too — boxes cap at 2x canvas (past that is mush
+    // or an OOM vector, never a look). Positions stay inside.
     const clamp01 = (v) => Math.min(1, Math.max(0, v));
     if (id === 'boxFace') {
       layoutPost({face_cx: +clamp01(g.x + g.w / 2).toFixed(3),
         face_cy: +clamp01(g.y + g.h / 2).toFixed(3),
-        face_size: +Math.min(2, Math.max(0.4, g.h / 0.45)).toFixed(2)});
+        face_size: +Math.min(4, Math.max(0.2, g.h / 0.45)).toFixed(2)});
     } else if (id === 'boxCam') {
       layoutPost({pip_pos: 'FREE',
-        pip_x: +(g.w >= 1 ? 1 : g.x / Math.max(0.01, 1 - g.w)).toFixed(3),
-        pip_y: +(g.h >= 1 ? 1 : g.y / Math.max(0.01, 1 - g.h)).toFixed(3),
-        pip_scale: +Math.min(1.5, Math.max(0.3, g.w / 0.34)).toFixed(2)});
+        pip_x: +clamp01(g.w >= 1 ? 1 : g.x / Math.max(0.01, 1 - g.w)).toFixed(3),
+        pip_y: +clamp01(g.h >= 1 ? 1 : g.y / Math.max(0.01, 1 - g.h)).toFixed(3),
+        pip_scale: +Math.min(3, Math.max(0.1, g.w / 0.34)).toFixed(2)});
     } else if (id === 'boxSlide') {
       if (vslideOn) {
-        layoutPost({vslide_scale: +Math.min(1, Math.max(0.3, g.h)).toFixed(2),
-          vslide_x: +(g.w >= 1 ? 0.5 : g.x / Math.max(0.01, 1 - g.w)).toFixed(3),
-          vslide_y: +(g.h >= 1 ? 0.5 : g.y / Math.max(0.01, 1 - g.h)).toFixed(3)});
+        layoutPost({vslide_scale: +Math.min(1.5, Math.max(0.2, g.h)).toFixed(2),
+          vslide_x: +clamp01(g.w >= 1 ? 0.5 : g.x / Math.max(0.01, 1 - g.w)).toFixed(3),
+          vslide_y: +clamp01(g.h >= 1 ? 0.5 : g.y / Math.max(0.01, 1 - g.h)).toFixed(3)});
       } else {
-        layoutPost({slide_zoom: +Math.min(1, Math.max(0.5, g.w)).toFixed(2),
-          slide_x: +(g.w >= 1 ? 0.5 : g.x / Math.max(0.01, 1 - g.w)).toFixed(3),
-          slide_y: +(g.h >= 1 ? 0.5 : g.y / Math.max(0.01, 1 - g.h)).toFixed(3)});
+        layoutPost({slide_zoom: +Math.min(2, Math.max(0.3, g.w)).toFixed(2),
+          slide_x: +clamp01(g.w >= 1 ? 0.5 : g.x / Math.max(0.01, 1 - g.w)).toFixed(3),
+          slide_y: +clamp01(g.h >= 1 ? 0.5 : g.y / Math.max(0.01, 1 - g.h)).toFixed(3)});
       }
     }
     if (final) showToast('🎨 LAYOUT APPLIED');
@@ -1745,11 +1765,11 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
       const p = pos(e);
       const g = lcGeom(LC.drag.id);
       if (LC.drag.mode === 'move') {
-        g.x = Math.min(1 - g.w, Math.max(0, p.x - LC.drag.dx));
-        g.y = Math.min(1 - g.h, Math.max(0, p.y - LC.drag.dy));
+        g.x = Math.min(1, Math.max(-1, p.x - LC.drag.dx));
+        g.y = Math.min(1, Math.max(-1, p.y - LC.drag.dy));
       } else {
-        g.w = Math.min(1 - g.x, Math.max(0.08, p.x - g.x));
-        g.h = Math.min(1 - g.y, Math.max(0.08, p.y - g.y));
+        g.w = Math.min(2, Math.max(0.08, p.x - g.x));
+        g.h = Math.min(2, Math.max(0.08, p.y - g.y));
       }
       lcSet(LC.drag.id, g);
       lcPost(LC.drag.id, false);
@@ -1994,8 +2014,10 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     });
   }
 
+  let currentSlideIdx = 0;
   function selectSlide(idx) {
     if (navigator.vibrate) navigator.vibrate(30);
+    currentSlideIdx = idx;
     fetch('/api/display_control', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -2011,6 +2033,38 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
       if (bs) bs.className = 'primary';
       if (bf) bf.className = '';
     });
+  }
+
+  function saveSlideText() {
+    if (navigator.vibrate) navigator.vibrate(30);
+    const name = document.getElementById('slideNameIn').value.trim();
+    const desc = document.getElementById('slideDescIn').value.trim();
+    if (!name && !desc) {
+      showToast('✏️ TYPE A TITLE OR DESCRIPTION FIRST');
+      return;
+    }
+    const body = {index: currentSlideIdx};
+    if (name) body.name = name;
+    if (desc) body.desc = desc;
+    fetch('/api/display_control', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({cmd: 'slide_text', slide_text: body})
+    }).then(() => {
+      showToast('✏️ SLIDE #' + (currentSlideIdx + 1) + ' UPDATED LIVE', true);
+      document.getElementById('slideNameIn').value = '';
+      document.getElementById('slideDescIn').value = '';
+    }).catch(() => { showToast('❌ TEXT UPDATE FAILED', false); });
+  }
+
+  function clearSlideText() {
+    fetch('/api/display_control', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({cmd: 'slide_text', slide_text: {index: currentSlideIdx, name: '', desc: ''}})
+    }).then(() => {
+      showToast('↩ SLIDE #' + (currentSlideIdx + 1) + ' RESTORED', true);
+    }).catch(() => {});
   }
 
   function stepSlide(dir) {
@@ -3070,6 +3124,9 @@ class WebRemoteHandler(BaseHTTPRequestHandler):
                         cur = getattr(config, "CAMERA_ROTATION", 0)
                         idx = order.index(cur) if cur in order else 0
                         config.CAMERA_ROTATION = order[(idx + 1) % len(order)]
+                elif cmd == "slide_text" and isinstance(body.get("slide_text"), dict):
+                    # ponytail: route into the calibrate pipeline (persistence + rebuild fan-out live there)
+                    COMMAND_QUEUE.put({"cmd": "calibrate", "slide_text": body["slide_text"]})
                 else:
                     COMMAND_QUEUE.put(body)
                 config.save_calibration()

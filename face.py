@@ -281,7 +281,7 @@ class TARSFace:
             mouth_h_ratio = config.MOUTH_H_RATIO
 
         # Layout Studio placement (pocket remote): position + scale freely, defaults = stock look.
-        _fs = min(2.0, max(0.4, float(getattr(config, "FACE_SIZE", 1.0))))
+        _fs = min(4.0, max(0.2, float(getattr(config, "FACE_SIZE", 1.0))))
         _cxr = min(0.9, max(0.1, float(getattr(config, "FACE_CX_RATIO", 0.5))))
         _cyr = getattr(config, "FACE_CY_RATIO", None)
         ow  = max(44, int(self.sw * eye_w_ratio * _fs))

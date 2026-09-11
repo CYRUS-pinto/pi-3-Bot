@@ -95,7 +95,7 @@ def pip_geom(pip_surf, cw: int, ch: int):
     """PiP video origin + display size honoring PIP_POS (corners or FREE fractions),
     PIP_SCALE, and PIP_CROP source cut. Returns (surf, px, py, dw, dh).
     Crop cuts ceiling/floor out of the camera BEFORE scaling (WYSIWYG with the box)."""
-    s = min(1.5, max(0.3, float(getattr(config, "PIP_SCALE", 1.0))))
+    s = min(3.0, max(0.1, float(getattr(config, "PIP_SCALE", 1.0))))
     pw, ph = pip_surf.get_width(), pip_surf.get_height()
     try:
         _cx, _cy, _cw, _ch = [min(1.0, max(0.0, float(v))) for v in getattr(config, "PIP_CROP", [0, 0, 1, 1])]
@@ -186,6 +186,12 @@ class EventCardManager:
         for i, ev in enumerate(EVENTS):
             surf = pygame.Surface((w, h)).convert()
             surf.fill(config.VOID)
+            # ponytail: pocket-remote text overrides (SLIDE_TEXT {index: {name, desc}}).
+            # Length-capped so a phone typo can't blow the layout.
+            _ov = getattr(config, "SLIDE_TEXT", {}) or {}
+            _ov = _ov.get(str(i), {}) or {}
+            ev = dict(ev, name=str(_ov.get("name", ev["name"]))[:60],
+                      desc=str(_ov.get("desc", ev["desc"]))[:300])
 
             # 1. Fest Header (Clean sci-fi title at upper center)
             ky = max(26, int(h * 0.045)) if is_portrait else max(38, int(h * 0.085))
@@ -627,6 +633,7 @@ def main():
         # ── Command Dispatcher (Handles queue and Pygame events) ─────────────
         def handle_payload(payload: dict):
             nonlocal last_gesture_banner, last_gesture_banner_until, last_cmd_t, last_cmd_sig, is_low_power, swipe_flash_dir, swipe_flash_t
+            nonlocal vs_mgr, vs_canvas, vs_key, vs_show, vs_show_key
             if not payload:
                 return
 
@@ -920,7 +927,7 @@ def main():
                     config.FACE_CY_RATIO = None if _v is None else min(0.9, max(0.1, float(_v)))
                     _layout_touched = True
                 if "face_size" in payload:
-                    config.FACE_SIZE = min(2.0, max(0.4, float(payload["face_size"])))
+                    config.FACE_SIZE = min(4.0, max(0.2, float(payload["face_size"])))
                     _layout_touched = True
                 if "pip_pos" in payload:
                     _pp = str(payload["pip_pos"]).upper()
@@ -928,7 +935,7 @@ def main():
                         config.PIP_POS = _pp
                         _layout_touched = True
                 if "pip_scale" in payload:
-                    config.PIP_SCALE = min(1.5, max(0.3, float(payload["pip_scale"])))
+                    config.PIP_SCALE = min(3.0, max(0.1, float(payload["pip_scale"])))
                     _layout_touched = True
                 if "pip_x" in payload:
                     config.PIP_X = min(1.0, max(0.0, float(payload["pip_x"])))
@@ -949,7 +956,7 @@ def main():
                     except Exception:
                         pass
                 if "slide_zoom" in payload:
-                    config.SLIDE_ZOOM = min(1.0, max(0.5, float(payload["slide_zoom"])))
+                    config.SLIDE_ZOOM = min(2.0, max(0.3, float(payload["slide_zoom"])))
                     _layout_touched = True
                 if "slide_x" in payload:
                     config.SLIDE_X = min(1.0, max(0.0, float(payload["slide_x"])))
@@ -961,7 +968,7 @@ def main():
                     config.VSLIDE_MODE = bool(payload["vslide_mode"])
                     banner_items.append(f"VSLIDES: {'COLUMN' if config.VSLIDE_MODE else 'FULL'}")
                 if "vslide_scale" in payload:
-                    config.VSLIDE_SCALE = min(1.0, max(0.3, float(payload["vslide_scale"])))
+                    config.VSLIDE_SCALE = min(1.5, max(0.2, float(payload["vslide_scale"])))
                     _layout_touched = True
                 if "vslide_x" in payload:
                     config.VSLIDE_X = min(1.0, max(0.0, float(payload["vslide_x"])))
@@ -969,6 +976,42 @@ def main():
                 if "vslide_y" in payload:
                     config.VSLIDE_Y = min(1.0, max(0.0, float(payload["vslide_y"])))
                     _layout_touched = True
+                # ── Slide text editing: rewrite a slide's title/desc live, persisted ──
+                if "slide_text" in payload and isinstance(payload["slide_text"], dict):
+                    try:
+                        _st = payload["slide_text"]
+                        _idx = int(_st.get("index", -1))
+                        from animation import EVENTS as _EVENTS
+                        if 0 <= _idx < len(_EVENTS):
+                            _cur = dict(getattr(config, "SLIDE_TEXT", {}) or {})
+                            _entry = dict(_cur.get(str(_idx), {}))
+                            if "name" in _st:
+                                _nv = str(_st["name"])[:60]
+                                if _nv:
+                                    _entry["name"] = _nv
+                                else:
+                                    _entry.pop("name", None)  # empty restores original
+                            if "desc" in _st:
+                                _dv = str(_st["desc"])[:300]
+                                if _dv:
+                                    _entry["desc"] = _dv
+                                else:
+                                    _entry.pop("desc", None)
+                            if _entry:
+                                _cur[str(_idx)] = _entry
+                            else:
+                                _cur.pop(str(_idx), None)
+                            config.SLIDE_TEXT = _cur
+                            config.SLIDE_TEXT_REV = int(getattr(config, "SLIDE_TEXT_REV", 0)) + 1
+                            card_mgr.resize(canvas_w, canvas_h, fonts)
+                            if sc_card_mgr is not None:
+                                sc_card_mgr.resize(sc_w, sc_h, sc_fonts)
+                            vs_mgr, vs_canvas, vs_key = None, None, None
+                            vs_show, vs_show_key = None, None
+                            _strip_reset()
+                            banner_items.append(f"SLIDE #{_idx + 1} TEXT UPDATED")
+                    except Exception:
+                        pass
                 if "vslide_fit" in payload:
                     _vf = str(payload["vslide_fit"]).upper()
                     if _vf in ("FIT", "STRETCH", "FILL"):
@@ -1231,15 +1274,16 @@ def main():
                 # ponytail: zoom is part of the key — otherwise a zoom drag wouldn't rebuild
                 # the cached static until the next slide change.
                 _skey = ("E" if in_event else "F", play.event_idx if in_event else -1,
+                         int(getattr(config, "SLIDE_TEXT_REV", 0)),
                          _rot_now, canvas_w, canvas_h, _sw, _sh,
-                         round(min(1.0, max(0.5, float(getattr(config, "SLIDE_ZOOM", 1.0)))), 3),
+                         round(min(2.0, max(0.3, float(getattr(config, "SLIDE_ZOOM", 1.0)))), 3),
                          round(min(1.0, max(0.0, float(getattr(config, "SLIDE_X", 0.5)))), 3),
                          round(min(1.0, max(0.0, float(getattr(config, "SLIDE_Y", 0.5)))), 3))
                 # ponytail: zoom drags re-post every tick; a 45ms rebuild per tick would stutter
                 # the drag itself. Structural changes rebuild now; zoom-only re-renders at most 2Hz.
-                _struct_new, _zoom_new = _skey[:7], _skey[7:]
-                _struct_old = _strip_static_key[:7] if _strip_static_key else None
-                _zoom_old = _strip_static_key[7:] if _strip_static_key else None
+                _struct_new, _zoom_new = _skey[:8], _skey[8:]
+                _struct_old = _strip_static_key[:8] if _strip_static_key else None
+                _zoom_old = _strip_static_key[8:] if _strip_static_key else None
                 _need_now = (_struct_new != _struct_old) or (
                     _zoom_new != _zoom_old and (frame_no - _strip_build_frame) >= 15)
                 if _need_now:
@@ -1249,10 +1293,18 @@ def main():
                     pygame.transform.smoothscale(renderer._bg, (sc_w, sc_h), sc_canvas)
                     if in_event:
                         sc_card_mgr.draw(sc_canvas, play)
-                        # ponytail: slide zoom letterboxes the card (pocket remote 50-100%).
+                        # ponytail: slide zoom letterboxes below 1.0, punch-in crops above.
                         # Paid once per slide change into the cached static — zero per-frame cost.
-                        _z = min(1.0, max(0.5, float(getattr(config, "SLIDE_ZOOM", 1.0))))
+                        _z = min(2.0, max(0.3, float(getattr(config, "SLIDE_ZOOM", 1.0))))
                         if _z < 0.999:
+                            _zw, _zh = max(1, int(sc_w * _z)), max(1, int(sc_h * _z))
+                            _zc = pygame.transform.smoothscale(sc_canvas, (_zw, _zh))
+                            _zx = min(1.0, max(0.0, float(getattr(config, "SLIDE_X", 0.5))))
+                            _zy = min(1.0, max(0.0, float(getattr(config, "SLIDE_Y", 0.5))))
+                            sc_canvas.fill(config.VOID)
+                            sc_canvas.blit(_zc, (int(_zx * (sc_w - _zw)), int(_zy * (sc_h - _zh))))
+                            del _zc
+                        elif _z > 1.001:
                             _zw, _zh = max(1, int(sc_w * _z)), max(1, int(sc_h * _z))
                             _zc = pygame.transform.smoothscale(sc_canvas, (_zw, _zh))
                             _zx = min(1.0, max(0.0, float(getattr(config, "SLIDE_X", 0.5))))
@@ -1369,7 +1421,8 @@ def main():
                         _vfit = _vfit if _vfit in ("FIT", "STRETCH", "FILL") else "FIT"
                         _vsc = min(1.0, max(0.3, float(getattr(config, "VSLIDE_SCALE", 0.9))))
                         _vrev = play.event_reveal_progress >= 1.0
-                        _vk = (play.event_idx, round(_vsc, 3), _vfit, _vrot, _vrev)
+                        _vk = (play.event_idx, round(_vsc, 3), _vfit, _vrot, _vrev,
+                               int(getattr(config, "SLIDE_TEXT_REV", 0)))
                         if _vk != vs_show_key:
                             _vmgr.draw(_vc, play)
                             _card = _vc if _vrot == 0 else pygame.transform.rotate(_vc, _vrot)
@@ -1406,12 +1459,12 @@ def main():
                         _vskip_zoom = False
                     # ponytail: slide zoom/position must work in the FULL pipeline too — rot-0
                     # landscape never runs the strip path, so strip-only zoom was dead there.
-                    # ~2-3ms during EVENT only (smoothscale down + centered blit).
+                    # Below 1.0 letterboxes; above 1.0 punch-in crops (blit clips). ~3ms EVENT-only.
                     # Skipped for vslide column (it carries its own scale + position above).
-                    _fz = min(1.0, max(0.5, float(getattr(config, "SLIDE_ZOOM", 1.0))))
+                    _fz = min(2.0, max(0.3, float(getattr(config, "SLIDE_ZOOM", 1.0))))
                     _fx = min(1.0, max(0.0, float(getattr(config, "SLIDE_X", 0.5))))
                     _fy = min(1.0, max(0.0, float(getattr(config, "SLIDE_Y", 0.5))))
-                    if not _vskip_zoom and (_fz < 0.999 or abs(_fx - 0.5) > 0.001 or abs(_fy - 0.5) > 0.001):
+                    if not _vskip_zoom and (_fz < 0.999 or _fz > 1.001 or abs(_fx - 0.5) > 0.001 or abs(_fy - 0.5) > 0.001):
                         _zw, _zh = max(1, int(canvas_w * _fz)), max(1, int(canvas_h * _fz))
                         _zs = pygame.transform.smoothscale(canvas, (_zw, _zh))
                         canvas.fill(config.VOID)

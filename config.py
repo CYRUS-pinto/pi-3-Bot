@@ -123,13 +123,13 @@ HUD_LOCK_DURATION   = 4.0      # How long a target lock reticle stays locked
 # values persist to calibration.json and apply live (face recomputes geometry).
 FACE_CX_RATIO = 0.5    # face center X as screen fraction (0.1 - 0.9, clamped)
 FACE_CY_RATIO = None   # face center Y fraction, or None = stock per-orientation ratio
-FACE_SIZE     = 1.0    # face scale multiplier (0.4 - 2.0, clamped)
+FACE_SIZE     = 1.0    # face scale multiplier (0.2 - 4.0; past ~2.5 is mush, kept legal anyway)
 PIP_POS       = "BR"   # PiP corner: TR, TL, BR, BL, or FREE (PIP_X/PIP_Y fractions)
-PIP_SCALE     = 1.0    # PiP size multiplier (0.3 - 1.5, clamped)
+PIP_SCALE     = 1.0    # PiP size multiplier (0.1 - 3.0; crash-guard only, not taste)
 PIP_X         = 1.0    # FREE-mode anchor X fraction (0 - 1)
 PIP_Y         = 1.0    # FREE-mode anchor Y fraction (0 - 1)
 PIP_CROP      = [0.0, 0.0, 1.0, 1.0]  # camera crop fractions [x, y, w, h] — cut ceiling/floor out
-SLIDE_ZOOM    = 1.0    # event-slide scale (0.5 - 1.0 letterboxed; 1.0 = full-bleed)
+SLIDE_ZOOM    = 1.0    # event-slide scale (0.3 shrink-letterbox … 2.0 punch-in crop; 1.0 = full-bleed)
 SLIDE_X       = 0.5    # slide anchor X fraction in the letterbox (0 - 1)
 SLIDE_Y       = 0.5    # slide anchor Y fraction in the letterbox (0 - 1)
 # ── Vertical-slides column (portrait cards floating mid-screen on a landscape
@@ -140,6 +140,8 @@ VSLIDE_X      = 0.5    # column anchor X fraction (0 - 1)
 VSLIDE_Y      = 0.5    # column anchor Y fraction (0 - 1)
 VSLIDE_FIT    = "FIT"  # FIT (contain, letterbox), STRETCH (exact box), FILL (cover, center-crop)
 VSLIDE_ROT    = 0      # slide content rotation inside the box: 0, 90, 180, 270
+SLIDE_TEXT    = {}     # pocket-remote text overrides: {index-str: {name, desc}}; length-capped at apply
+SLIDE_TEXT_REV = 0     # bumped on every text edit so cached statics rebuild
 
 # ── Calibration & Live Sightline Controls ────────────────────────────────────
 MIRROR_GAZE_X         = False    # Invert horizontal eye gaze tracking (toggle if robot eye looks opposite to you)
@@ -231,6 +233,7 @@ def load_calibration():
     global FACE_CX_RATIO, FACE_CY_RATIO, FACE_SIZE, PIP_POS, PIP_SCALE
     global PIP_X, PIP_Y, PIP_CROP, SLIDE_ZOOM, SLIDE_X, SLIDE_Y
     global VSLIDE_MODE, VSLIDE_SCALE, VSLIDE_X, VSLIDE_Y, VSLIDE_FIT, VSLIDE_ROT
+    global SLIDE_TEXT, SLIDE_TEXT_REV
     if os.path.exists(CALIBRATION_FILE):
         try:
             with open(CALIBRATION_FILE, "r") as f:
@@ -268,10 +271,10 @@ def load_calibration():
             FACE_CX_RATIO = min(0.9, max(0.1, float(data.get("face_cx", FACE_CX_RATIO if FACE_CX_RATIO is not None else 0.5))))
             _cy = data.get("face_cy", FACE_CY_RATIO)
             FACE_CY_RATIO = None if _cy is None else min(0.9, max(0.1, float(_cy)))
-            FACE_SIZE = min(2.0, max(0.4, float(data.get("face_size", FACE_SIZE))))
+            FACE_SIZE = min(4.0, max(0.2, float(data.get("face_size", FACE_SIZE))))
             _pp = str(data.get("pip_pos", PIP_POS)).upper()
             PIP_POS = _pp if _pp in ("TR", "TL", "BR", "BL", "FREE") else "BR"
-            PIP_SCALE = min(1.5, max(0.3, float(data.get("pip_scale", PIP_SCALE))))
+            PIP_SCALE = min(3.0, max(0.1, float(data.get("pip_scale", PIP_SCALE))))
             PIP_X = min(1.0, max(0.0, float(data.get("pip_x", PIP_X))))
             PIP_Y = min(1.0, max(0.0, float(data.get("pip_y", PIP_Y))))
             try:
@@ -280,11 +283,11 @@ def load_calibration():
                     PIP_CROP = _cr
             except Exception:
                 pass
-            SLIDE_ZOOM = min(1.0, max(0.5, float(data.get("slide_zoom", SLIDE_ZOOM))))
+            SLIDE_ZOOM = min(2.0, max(0.3, float(data.get("slide_zoom", SLIDE_ZOOM))))
             SLIDE_X = min(1.0, max(0.0, float(data.get("slide_x", SLIDE_X))))
             SLIDE_Y = min(1.0, max(0.0, float(data.get("slide_y", SLIDE_Y))))
             VSLIDE_MODE = bool(data.get("vslide_mode", VSLIDE_MODE))
-            VSLIDE_SCALE = min(1.0, max(0.3, float(data.get("vslide_scale", VSLIDE_SCALE))))
+            VSLIDE_SCALE = min(1.5, max(0.2, float(data.get("vslide_scale", VSLIDE_SCALE))))
             VSLIDE_X = min(1.0, max(0.0, float(data.get("vslide_x", VSLIDE_X))))
             VSLIDE_Y = min(1.0, max(0.0, float(data.get("vslide_y", VSLIDE_Y))))
             _vf = str(data.get("vslide_fit", VSLIDE_FIT)).upper()
@@ -292,6 +295,23 @@ def load_calibration():
             try:
                 _vr = int(data.get("vslide_rot", VSLIDE_ROT))
                 VSLIDE_ROT = _vr if _vr in (0, 90, 180, 270) else 0
+            except Exception:
+                pass
+            try:
+                _st = data.get("slide_text", {})
+                if isinstance(_st, dict):
+                    _clean = {}
+                    for _k, _v in list(_st.items())[:12]:
+                        if isinstance(_v, dict):
+                            _clean[str(int(_k))] = {
+                                "name": str(_v.get("name", ""))[:60],
+                                "desc": str(_v.get("desc", ""))[:300],
+                            }
+                    SLIDE_TEXT = _clean
+            except Exception:
+                pass
+            try:
+                SLIDE_TEXT_REV = int(data.get("slide_text_rev", SLIDE_TEXT_REV))
             except Exception:
                 pass
         except Exception:
@@ -349,6 +369,8 @@ def save_calibration():
         "vslide_y": VSLIDE_Y,
         "vslide_fit": VSLIDE_FIT,
         "vslide_rot": VSLIDE_ROT,
+        "slide_text": {k: dict(v) for k, v in SLIDE_TEXT.items()},
+        "slide_text_rev": SLIDE_TEXT_REV,
     }
     try:
         with open(CALIBRATION_FILE, "w") as f:

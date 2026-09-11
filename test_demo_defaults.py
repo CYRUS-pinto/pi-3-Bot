@@ -42,6 +42,7 @@ for key in ("screen_rotation", "auto_cycle_enabled", "gesture_mode", "show_gestu
             "face_cx", "face_cy", "face_size", "pip_pos", "pip_scale",
             "pip_x", "pip_y", "pip_crop", "slide_zoom", "slide_x", "slide_y",
             "vslide_mode", "vslide_scale", "vslide_x", "vslide_y",
-            "vslide_fit", "vslide_rot"):
+            "vslide_fit", "vslide_rot", "slide_text", "slide_text_rev"):
+    assert isinstance(config.SLIDE_TEXT, dict) and isinstance(config.SLIDE_TEXT_REV, int)
     assert key in cal, f"calibration.json missing {key}"
 print("DEMO_DEFAULTS_OK")
