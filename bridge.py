@@ -713,6 +713,11 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     </div>
   </div>
   <div style="font-size:10px; color:var(--muted); margin-top:6px;">Boxes mirror TV layout — look at the TV while you drag. Sliders below fine-tune.</div>
+  <div class="grid grid-3" style="margin-top:8px;">
+    <button onclick="resetBoxFace()" style="padding:9px 8px; font-size:11px; font-weight:bold;">↩ FACE</button>
+    <button onclick="resetBoxCam()" style="padding:9px 8px; font-size:11px; font-weight:bold;">↩ CAM</button>
+    <button onclick="resetBoxSlide()" style="padding:9px 8px; font-size:11px; font-weight:bold;">↩ SLIDE</button>
+  </div>
 </div>
 
 <!-- 🎛️ LAYOUT STUDIO — move/resize face + camera box freely, changes apply live -->
@@ -1603,9 +1608,26 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     const l = document.getElementById(id);
     if (l) l.textContent = Math.round(v) + suffix;
   }
+  function resetBoxFace() {
+    lcSet('boxFace', {x: 0.275, y: 0.2575, w: 0.45, h: 0.3375});
+    document.getElementById('rngFaceX').value = 50;
+    document.getElementById('rngFaceSize').value = 100;
+    layoutPost({face_cx: 0.5, face_cy: null, face_size: 1.0}, '↩ FACE RESET');
+  }
+  function resetBoxCam() {
+    lcSet('boxCam', {x: 0.66, y: 0.66, w: 0.34, h: 0.255});
+    layoutPost({pip_pos: 'BR', pip_x: 1.0, pip_y: 1.0, pip_scale: 1.0, pip_crop: [0, 0, 1, 1]}, '↩ CAM RESET');
+  }
+  function resetBoxSlide() {
+    lcSet('boxSlide', {x: 0, y: 0, w: 1, h: 1});
+    layoutPost({slide_zoom: 1.0, slide_x: 0.5, slide_y: 0.5,
+      vslide_scale: 0.9, vslide_x: 0.5, vslide_y: 0.5}, '↩ SLIDE RESET');
+  }
 
   // 🎨 Layout Canvas — Paint-style direct manipulation (Pointer Events: mouse + touch)
-  const LC = {drag: null, lastPost: 0};
+  // ponytail: boxes init ONCE from the Pi, then belong to the user. Re-initing every
+  // status poll fought mid-drag adjustments ("stop auto applying"). Aspect flips re-init once.
+  const LC = {drag: null, lastPost: 0, initDone: false, lastAspect: ''};
   function lcGeom(id) {
     const el = document.getElementById(id);
     return {
@@ -1650,8 +1672,10 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     }
     if (final) showToast('🎨 LAYOUT APPLIED');
   }
-  function lcInitBoxes(c) {
+  function lcInitBoxes(c, force) {
     if (!c || LC.drag) return;
+    if (LC.initDone && !force) return;
+    LC.initDone = true;
     const fx = (c.face_cx !== undefined) ? c.face_cx : 0.5;
     const fy = (c.face_cy !== undefined && c.face_cy !== null) ? c.face_cy : 0.44;
     const fs = (c.face_size !== undefined) ? c.face_size : 1.0;
@@ -1679,7 +1703,16 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
   }
   function lcAspect(rot) {
     const cv = document.getElementById('layoutCanvas');
-    if (cv) cv.style.aspectRatio = (rot === 90 || rot === 270) ? '9/16' : '16/9';
+    if (!cv) return;
+    const a = (rot === 90 || rot === 270) ? '9/16' : '16/9';
+    if (LC.lastAspect && LC.lastAspect !== a) {
+      LC.initDone = false;  // structural flip: one fresh init, then hands off again
+      LC.lastAspect = a;
+      cv.style.aspectRatio = a;
+    } else if (!LC.lastAspect) {
+      LC.lastAspect = a;
+      cv.style.aspectRatio = a;
+    }
   }
   (function lcBind() {
     const cv = document.getElementById('layoutCanvas');
