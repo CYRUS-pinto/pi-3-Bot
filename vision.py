@@ -370,6 +370,8 @@ class OpticalGestureEngine:
         self.locked_rebound_gesture = ""
         self.rebound_lockout_until = 0.0
         self.last_swipe_fired_t = 0.0      # Timestamp when last swipe was fired (history before this is stale)
+        self._confirm_cand = ""            # Confirm-N streak state (GESTURE_CONFIRM_N)
+        self._confirm_n = 0
         self.hand_must_settle = False
         self.hand_detected = False
         self.hand_box: tuple[float, float, float, float] | None = None
@@ -720,6 +722,18 @@ class OpticalGestureEngine:
                     if getattr(config, "GESTURE_DEBUG_LOGS", True):
                         rem = self.rebound_lockout_until - current_time
                         config.tlog("GestureHUD", f"REBOUND IGNORED: {candidate} (return stroke filtered, {rem:.2f}s remaining)")
+                    return None
+
+                # Confirm-N: same candidate on consecutive evaluations before firing.
+                # ponytail: default 1 = today's behavior exactly. 2-3 = single-frame motion
+                # noise (sleeves, light flicker, kids flailing) never fires alone. Costs ~1 AI
+                # frame (~45ms) per extra confirm — the cheapest accuracy on this silicon.
+                _need = max(1, min(3, int(getattr(config, "GESTURE_CONFIRM_N", 1))))
+                if candidate == self._confirm_cand:
+                    self._confirm_n += 1
+                else:
+                    self._confirm_cand, self._confirm_n = candidate, 1
+                if self._confirm_n < _need:
                     return None
 
                 rebound_time = getattr(config, "GESTURE_REBOUND_LOCKOUT_SEC", 0.60)

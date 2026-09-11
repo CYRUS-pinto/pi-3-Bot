@@ -65,6 +65,29 @@ def test_kid_flick_fires_without_full_sweep():
     print("FLICK_OK", fired)
 
 
+def test_confirm_two_needs_repeat_but_still_fires():
+    # Confirm-N=2: one evaluation alone must NOT fire (kills single-frame noise),
+    # sustained motion must still fire (no deadlock for real users).
+    old = config.GESTURE_CONFIRM_N
+    config.GESTURE_CONFIRM_N = 2
+    try:
+        eng = OpticalGestureEngine()
+        eng.process(_black(), face_boxes=[])
+        fired = None
+        for i in range(20):
+            f = _black()
+            x = 40 + i * 22
+            f[150:210, x:x + 60] = 255
+            r = eng.process(f, face_boxes=[])
+            if isinstance(r, str) and "SWIPE" in r:
+                fired = r
+                break
+        assert fired is not None, "confirm-2 deadlocked a real sustained sweep?"
+        print("CONFIRM_OK", fired)
+    finally:
+        config.GESTURE_CONFIRM_N = old
+
+
 def test_caches_bounded():
     import pygame
     pygame.init()
@@ -89,6 +112,7 @@ def test_caches_bounded():
 test_still_frames_cost_nothing_and_fire_nothing()
 test_synthetic_sweep_still_fires()
 test_kid_flick_fires_without_full_sweep()
+test_confirm_two_needs_repeat_but_still_fires()
 test_caches_bounded()
 
 config.GESTURE_COOLDOWN_SEC, config.GESTURE_SWIPE_DISTANCE, \

@@ -673,6 +673,17 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     <input type="range" id="rngHandSize" min="0.5" max="2.0" step="0.1" value="1.0" oninput="onLayoutChangeHandSize()" style="width:100%; accent-color:var(--gold);">
     <div style="font-size:9px; color:#555d6e; margin-top:2px;">CONTOUR SIZE WINDOW &bull; SMALLER HANDS NEED LOWER</div>
   </div>
+  <div style="margin-bottom:12px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; font-size:10px; color:var(--muted); margin-bottom:2px;">
+      <span>🛡️ CONFIRM (REPEAT-TO-FIRE)</span>
+      <span>
+        <button onclick="stepConfirm(-1)" style="padding:4px 10px; font-size:11px;">−</button>
+        <span id="lblConfirmN" style="color:var(--gold); font-weight:bold; padding:0 6px;">1x</span>
+        <button onclick="stepConfirm(1)" style="padding:4px 10px; font-size:11px;">+</button>
+      </span>
+    </div>
+    <div style="font-size:9px; color:#555d6e; margin-top:2px;">1 = INSTANT &bull; 2–3 = NOISE-PROOF (CROWDS)</div>
+  </div>
 
   <div style="margin-bottom:12px;">
     <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--muted); margin-bottom:2px;">
@@ -866,6 +877,14 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     <span style="font-size:11px; color:var(--muted);">✋ HAND LANDMARKS</span>
     <span id="lmBadge" style="font-size:10px; padding:2px 8px; border-radius:4px; font-weight:bold; color:var(--muted); border:1px solid var(--border);">OFF — motion only</span>
   </div>
+  <div style="font-size:11px; color:var(--muted); margin:10px 0 6px;">🖥️ FIT VISIBLE (foam edges eat screen — measure once, tap fit)</div>
+  <div class="grid grid-4" style="margin-bottom:8px;">
+    <div><div style="font-size:10px; color:var(--muted);">LEFT <span id="lblFoamL">0</span></div><input type="range" id="rngFoamL" min="0" max="40" step="1" value="0" oninput="onFoamChange()" style="width:100%; accent-color:var(--gold);"></div>
+    <div><div style="font-size:10px; color:var(--muted);">TOP <span id="lblFoamT">0</span></div><input type="range" id="rngFoamT" min="0" max="40" step="1" value="0" oninput="onFoamChange()" style="width:100%; accent-color:var(--gold);"></div>
+    <div><div style="font-size:10px; color:var(--muted);">RIGHT <span id="lblFoamR">0</span></div><input type="range" id="rngFoamR" min="0" max="40" step="1" value="0" oninput="onFoamChange()" style="width:100%; accent-color:var(--gold);"></div>
+    <div><div style="font-size:10px; color:var(--muted);">BOTTOM <span id="lblFoamB">0</span></div><input type="range" id="rngFoamB" min="0" max="40" step="1" value="0" oninput="onFoamChange()" style="width:100%; accent-color:var(--gold);"></div>
+  </div>
+  <button onclick="fitVisible()" class="mint" style="width:100%; padding:11px 8px; font-size:12px; font-weight:bold;">⛶ FIT SLIDES IN VISIBLE AREA</button>
   <div style="display:flex; gap:8px;">
     <button onclick="resetLayout()" style="flex:1; padding:10px 8px; font-size:11px; font-weight:bold; background:#161b22; border-color:#2a3242; color:#ff8c41;">↩ FACE CENTER + AUTO HEIGHT</button>
   </div>
@@ -1657,6 +1676,49 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
       const bf = document.getElementById('pipFREE');
       if (bf) bf.className = (c.pip_pos === 'FREE') ? 'mint' : '';
     }
+  }
+  function onFoamChange() {
+    const fl = +document.getElementById('rngFoamL').value;
+    const ft = +document.getElementById('rngFoamT').value;
+    const fr = +document.getElementById('rngFoamR').value;
+    const fb = +document.getElementById('rngFoamB').value;
+    document.getElementById('lblFoamL').textContent = fl;
+    document.getElementById('lblFoamT').textContent = ft;
+    document.getElementById('lblFoamR').textContent = fr;
+    document.getElementById('lblFoamB').textContent = fb;
+    layoutPost({foam_l: fl / 100, foam_t: ft / 100, foam_r: fr / 100, foam_b: fb / 100});
+  }
+  function fitVisible() {
+    if (navigator.vibrate) navigator.vibrate(40);
+    const fl = +document.getElementById('rngFoamL').value / 100;
+    const ft = +document.getElementById('rngFoamT').value / 100;
+    const fr = +document.getElementById('rngFoamR').value / 100;
+    const fb = +document.getElementById('rngFoamB').value / 100;
+    const vw = Math.max(0.1, 1 - fl - fr), vh = Math.max(0.1, 1 - ft - fb);
+    // fullscreen slides: biggest uniform zoom fitting the visible rect, anchored in it
+    const zm = Math.min(2, Math.max(0.3, Math.min(vw, vh)));
+    const sx = Math.min(2, Math.max(-1, fl + (vw - zm) / 2));
+    const sy = Math.min(2, Math.max(-1, ft + (vh - zm) / 2));
+    // portrait column: height fills visible, centered in it
+    const vh2 = Math.min(1.5, Math.max(0.2, vh));
+    const vw2 = vh2 * 0.316;
+    const vx = Math.min(2, Math.max(-1, fl + (vw - vw2) / 2));
+    const vy = Math.min(2, Math.max(-1, ft + (vh - vh2) / 2));
+    document.getElementById('rngZoom').value = Math.round(zm * 100);
+    document.getElementById('rngSlideX').value = Math.round(sx * 100);
+    document.getElementById('rngSlideY').value = Math.round(sy * 100);
+    document.getElementById('lblZoom').textContent = Math.round(zm * 100) + '%';
+    document.getElementById('lblSlideX').textContent = Math.round(sx * 100) + '%';
+    document.getElementById('lblSlideY').textContent = Math.round(sy * 100) + '%';
+    layoutPost({slide_zoom: +zm.toFixed(2), slide_x: +sx.toFixed(3), slide_y: +sy.toFixed(3),
+      vslide_scale: +vh2.toFixed(2), vslide_x: +vx.toFixed(3), vslide_y: +vy.toFixed(3)},
+      '⛶ FIT VISIBLE APPLIED');
+  }
+  let confirmN = 1;
+  function stepConfirm(d) {
+    confirmN = Math.min(3, Math.max(1, confirmN + d));
+    document.getElementById('lblConfirmN').textContent = confirmN + 'x';
+    layoutPost({gesture_confirm_n: confirmN}, '🛡️ CONFIRM → ' + confirmN + 'x');
   }
   function onLayoutChangeHandSize() {
     const r = document.getElementById('rngHandSize');
@@ -2613,6 +2675,20 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
           const lhs = document.getElementById('lblHandSize');
           if (lhs) lhs.textContent = Number(st.calibration.gesture_hand_size).toFixed(1) + 'x';
         }
+        if (st.calibration.gesture_confirm_n !== undefined) {
+          confirmN = st.calibration.gesture_confirm_n;
+          const lc = document.getElementById('lblConfirmN');
+          if (lc) lc.textContent = confirmN + 'x';
+        }
+        [['rngFoamL', 'lblFoamL', 'foam_l'], ['rngFoamT', 'lblFoamT', 'foam_t'],
+         ['rngFoamR', 'lblFoamR', 'foam_r'], ['rngFoamB', 'lblFoamB', 'foam_b']].forEach(([rid, lid, key]) => {
+          if (st.calibration[key] !== undefined) {
+            const r = document.getElementById(rid);
+            if (r && document.activeElement !== r) r.value = Math.round(st.calibration[key] * 100);
+            const l = document.getElementById(lid);
+            if (l) l.textContent = Math.round(st.calibration[key] * 100);
+          }
+        });
         if (st.calibration.swipe_anim_enabled !== undefined) {
           updateSwipeAnimButton(st.calibration.swipe_anim_enabled);
         }
@@ -2902,6 +2978,16 @@ class WebRemoteHandler(BaseHTTPRequestHandler):
                     "sens_x": config.GAZE_SENSITIVITY_X,
                     "sens_y": config.GAZE_SENSITIVITY_Y,
                     "gesture_sens": getattr(config, "GESTURE_SWIPE_SENSITIVITY", 1.0),
+                    "gesture_confirm_n": getattr(config, "GESTURE_CONFIRM_N", 1),
+                    "foam_l": getattr(config, "FOAM_L", 0.0),
+                    "foam_t": getattr(config, "FOAM_T", 0.0),
+                    "foam_r": getattr(config, "FOAM_R", 0.0),
+                    "foam_b": getattr(config, "FOAM_B", 0.0),
+                    "gesture_confirm_n": getattr(config, "GESTURE_CONFIRM_N", 1),
+                    "foam_l": getattr(config, "FOAM_L", 0.0),
+                    "foam_t": getattr(config, "FOAM_T", 0.0),
+                    "foam_r": getattr(config, "FOAM_R", 0.0),
+                    "foam_b": getattr(config, "FOAM_B", 0.0),
                     "gesture_hand_size": getattr(config, "GESTURE_HAND_SIZE", 1.0),
                     "sens_left": getattr(config, "GESTURE_SENS_LEFT", 1.0),
                     "sens_right": getattr(config, "GESTURE_SENS_RIGHT", 1.0),

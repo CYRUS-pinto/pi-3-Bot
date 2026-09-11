@@ -920,6 +920,13 @@ def main():
                 if "gesture_hand_size" in payload:
                     config.GESTURE_HAND_SIZE = min(2.0, max(0.5, float(payload["gesture_hand_size"])))
                     banner_items.append(f"HAND SIZE: {config.GESTURE_HAND_SIZE:.1f}x")
+                if "gesture_confirm_n" in payload:
+                    config.GESTURE_CONFIRM_N = max(1, min(3, int(payload["gesture_confirm_n"])))
+                    banner_items.append(f"CONFIRM: {config.GESTURE_CONFIRM_N}x")
+                for _fk, _fattr in (("foam_l", "FOAM_L"), ("foam_t", "FOAM_T"),
+                                    ("foam_r", "FOAM_R"), ("foam_b", "FOAM_B")):
+                    if _fk in payload:
+                        setattr(config, _fattr, min(0.4, max(0.0, float(payload[_fk]))))
                 # ── Layout Studio: move/resize face + PiP live from the pocket remote ──
                 _layout_touched = False
                 if "face_cx" in payload:

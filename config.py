@@ -143,6 +143,11 @@ VSLIDE_ROT    = 0      # slide content rotation inside the box: 0, 90, 180, 270
 SLIDE_TEXT    = {}     # pocket-remote text overrides: {index-str: {name, desc}}; length-capped at apply
 SLIDE_TEXT_REV = 0     # bumped on every text edit so cached statics rebuild
 GESTURE_HAND_SIZE = 1.0  # hand-size scale for every-user accuracy (kids ~0.6, adults ~1.0-1.3); remote slider
+GESTURE_CONFIRM_N = 1    # fire after N consecutive same-direction evaluations (1 = instant, 2-3 = false-trigger-proof)
+FOAM_L = 0.0             # visible-screen margins as fractions (thermocol eats edges; FIT VISIBLE uses these)
+FOAM_T = 0.0
+FOAM_R = 0.0
+FOAM_B = 0.0
 
 # ── Calibration & Live Sightline Controls ────────────────────────────────────
 MIRROR_GAZE_X         = False    # Invert horizontal eye gaze tracking (toggle if robot eye looks opposite to you)
@@ -234,7 +239,8 @@ def load_calibration():
     global FACE_CX_RATIO, FACE_CY_RATIO, FACE_SIZE, PIP_POS, PIP_SCALE
     global PIP_X, PIP_Y, PIP_CROP, SLIDE_ZOOM, SLIDE_X, SLIDE_Y
     global VSLIDE_MODE, VSLIDE_SCALE, VSLIDE_X, VSLIDE_Y, VSLIDE_FIT, VSLIDE_ROT
-    global SLIDE_TEXT, SLIDE_TEXT_REV, GESTURE_HAND_SIZE
+    global SLIDE_TEXT, SLIDE_TEXT_REV, GESTURE_HAND_SIZE, GESTURE_CONFIRM_N
+    global FOAM_L, FOAM_T, FOAM_R, FOAM_B
     if os.path.exists(CALIBRATION_FILE):
         try:
             with open(CALIBRATION_FILE, "r") as f:
@@ -316,6 +322,11 @@ def load_calibration():
             except Exception:
                 pass
             GESTURE_HAND_SIZE = min(2.0, max(0.5, float(data.get("gesture_hand_size", GESTURE_HAND_SIZE))))
+            GESTURE_CONFIRM_N = max(1, min(3, int(data.get("gesture_confirm_n", GESTURE_CONFIRM_N))))
+            FOAM_L = min(0.4, max(0.0, float(data.get("foam_l", FOAM_L))))
+            FOAM_T = min(0.4, max(0.0, float(data.get("foam_t", FOAM_T))))
+            FOAM_R = min(0.4, max(0.0, float(data.get("foam_r", FOAM_R))))
+            FOAM_B = min(0.4, max(0.0, float(data.get("foam_b", FOAM_B))))
         except Exception:
             pass
 
@@ -374,6 +385,11 @@ def save_calibration():
         "slide_text": {k: dict(v) for k, v in SLIDE_TEXT.items()},
         "slide_text_rev": SLIDE_TEXT_REV,
         "gesture_hand_size": GESTURE_HAND_SIZE,
+        "gesture_confirm_n": GESTURE_CONFIRM_N,
+        "foam_l": FOAM_L,
+        "foam_t": FOAM_T,
+        "foam_r": FOAM_R,
+        "foam_b": FOAM_B,
     }
     try:
         with open(CALIBRATION_FILE, "w") as f:

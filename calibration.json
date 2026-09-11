@@ -49,5 +49,11 @@
   "vslide_fit": "FIT",
   "vslide_rot": 0,
   "slide_text": {},
-  "slide_text_rev": 0
+  "slide_text_rev": 0,
+  "gesture_hand_size": 1.0,
+  "gesture_confirm_n": 1,
+  "foam_l": 0.0,
+  "foam_t": 0.0,
+  "foam_r": 0.0,
+  "foam_b": 0.0
 }
