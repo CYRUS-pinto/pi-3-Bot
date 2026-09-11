@@ -35,5 +35,9 @@
   "face_cy": null,
   "face_size": 1.0,
   "pip_pos": "BR",
-  "pip_scale": 1.0
+  "pip_scale": 1.0,
+  "pip_x": 1.0,
+  "pip_y": 1.0,
+  "pip_crop": [0.0, 0.0, 1.0, 1.0],
+  "slide_zoom": 1.0
 }

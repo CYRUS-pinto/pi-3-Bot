@@ -92,17 +92,35 @@ def _strip_scale_for(rot: int, cw: int, ch: int, sw: int, sh: int) -> int | None
 
 
 def pip_geom(pip_surf, cw: int, ch: int):
-    """PiP video origin + display size honoring PIP_POS corner and PIP_SCALE.
-    Returns (surf, px, py, dw, dh), downscaling the source when the corner box is smaller."""
+    """PiP video origin + display size honoring PIP_POS (corners or FREE fractions),
+    PIP_SCALE, and PIP_CROP source cut. Returns (surf, px, py, dw, dh).
+    Crop cuts ceiling/floor out of the camera BEFORE scaling (WYSIWYG with the box)."""
     s = min(1.5, max(0.3, float(getattr(config, "PIP_SCALE", 1.0))))
     pw, ph = pip_surf.get_width(), pip_surf.get_height()
+    try:
+        _cx, _cy, _cw, _ch = [min(1.0, max(0.0, float(v))) for v in getattr(config, "PIP_CROP", [0, 0, 1, 1])]
+    except Exception:
+        _cx, _cy, _cw, _ch = (0.0, 0.0, 1.0, 1.0)
+    if (_cx, _cy, _cw, _ch) != (0.0, 0.0, 1.0, 1.0) and _cw > 0.05 and _ch > 0.05:
+        _rx = min(pw - 1, max(0, int(_cx * pw)))
+        _ry = min(ph - 1, max(0, int(_cy * ph)))
+        _rw = max(1, min(pw - _rx, int(_cw * pw)))
+        _rh = max(1, min(ph - _ry, int(_ch * ph)))
+        pip_surf = pip_surf.subsurface(pygame.Rect(_rx, _ry, _rw, _rh)).copy()
+        pw, ph = _rw, _rh
     dw = max(48, int(min(pw, max(96, int(cw * 0.34))) * s))
     dh = max(1, int(dw * ph / pw))
     if (dw, dh) != (pw, ph):
         pip_surf = pygame.transform.smoothscale(pip_surf, (dw, dh))
     mx, my = max(16, int(cw * 0.02)), max(16, int(ch * 0.03))
     pos = str(getattr(config, "PIP_POS", "BR")).upper()
-    if pos == "TL":
+    if pos == "FREE":
+        _fx = min(1.0, max(0.0, float(getattr(config, "PIP_X", 1.0))))
+        _fy = min(1.0, max(0.0, float(getattr(config, "PIP_Y", 1.0))))
+        px, py = int(_fx * max(0, cw - dw)), int(_fy * max(0, ch - dh))
+        if py < 20 and pos == "FREE":
+            py = 20  # keep the tag strip on-canvas
+    elif pos == "TL":
         px, py = mx, my + 20
     elif pos == "TR":
         px, py = cw - dw - mx, my + 20
@@ -883,6 +901,27 @@ def main():
                 if "pip_scale" in payload:
                     config.PIP_SCALE = min(1.5, max(0.3, float(payload["pip_scale"])))
                     _layout_touched = True
+                if "pip_x" in payload:
+                    config.PIP_X = min(1.0, max(0.0, float(payload["pip_x"])))
+                    if str(getattr(config, "PIP_POS", "BR")).upper() != "FREE":
+                        config.PIP_POS = "FREE"  # dragging X/Y implies free placement
+                    _layout_touched = True
+                if "pip_y" in payload:
+                    config.PIP_Y = min(1.0, max(0.0, float(payload["pip_y"])))
+                    if str(getattr(config, "PIP_POS", "BR")).upper() != "FREE":
+                        config.PIP_POS = "FREE"
+                    _layout_touched = True
+                if "pip_crop" in payload:
+                    try:
+                        _cr = [min(1.0, max(0.0, float(v))) for v in payload["pip_crop"]]
+                        if len(_cr) == 4 and _cr[2] > 0.05 and _cr[3] > 0.05:
+                            config.PIP_CROP = _cr
+                            _layout_touched = True
+                    except Exception:
+                        pass
+                if "slide_zoom" in payload:
+                    config.SLIDE_ZOOM = min(1.0, max(0.5, float(payload["slide_zoom"])))
+                    _layout_touched = True
                 if _layout_touched:
                     renderer.face._invalidate()  # recompute geometry next draw; strip cache re-keys on rect
                     banner_items.append("LAYOUT UPDATED")
@@ -1127,14 +1166,26 @@ def main():
             # (STRIPDBG served its verdict 2026-09-11: rot=0 user-set for landscape tests. Removed.)
             if _strip_ran:
                 # ── Strip path: cached static + transformed dynamic strips ──
+                # ponytail: zoom is part of the key — otherwise a zoom drag wouldn't rebuild
+                # the cached static until the next slide change.
                 _skey = ("E" if in_event else "F", play.event_idx if in_event else -1,
-                         _rot_now, canvas_w, canvas_h, _sw, _sh)
+                         _rot_now, canvas_w, canvas_h, _sw, _sh,
+                         round(min(1.0, max(0.5, float(getattr(config, "SLIDE_ZOOM", 1.0)))), 3))
                 if _skey != _strip_static_key:
                     _strip_static_prev = _strip_static
                     # base: bg smooth-upscaled once (flat void/vignette upscale cleanly)
                     pygame.transform.smoothscale(renderer._bg, (sc_w, sc_h), sc_canvas)
                     if in_event:
                         sc_card_mgr.draw(sc_canvas, play)
+                        # ponytail: slide zoom letterboxes the card (pocket remote 50-100%).
+                        # Paid once per slide change into the cached static — zero per-frame cost.
+                        _z = min(1.0, max(0.5, float(getattr(config, "SLIDE_ZOOM", 1.0))))
+                        if _z < 0.999:
+                            _zw, _zh = max(1, int(sc_w * _z)), max(1, int(sc_h * _z))
+                            _zc = pygame.transform.smoothscale(sc_canvas, (_zw, _zh))
+                            sc_canvas.fill(config.VOID)
+                            sc_canvas.blit(_zc, ((sc_w - _zw) // 2, (sc_h - _zh) // 2))
+                            del _zc
                     else:
                         sc_canvas.blit(sc_label, (sc_label_x, sc_label_y))
                         sc_canvas.blit(sc_hint, (sc_hint_x, sc_hint_y))

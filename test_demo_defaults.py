@@ -26,11 +26,15 @@ assert abs(config.FACE_CX_RATIO - 0.5) < 1e-9, config.FACE_CX_RATIO
 assert config.FACE_CY_RATIO is None, config.FACE_CY_RATIO
 assert config.PIP_POS == "BR", config.PIP_POS
 assert abs(config.PIP_SCALE - 1.0) < 1e-9, config.PIP_SCALE
+assert abs(config.PIP_X - 1.0) < 1e-9 and abs(config.PIP_Y - 1.0) < 1e-9
+assert list(config.PIP_CROP) == [0.0, 0.0, 1.0, 1.0], config.PIP_CROP
+assert abs(config.SLIDE_ZOOM - 1.0) < 1e-9, config.SLIDE_ZOOM
 
 # Shipped calibration file must carry the demo keys (values may be user-toggled at runtime).
 cal = json.load(open("calibration.json"))
 for key in ("screen_rotation", "auto_cycle_enabled", "gesture_mode", "show_gesture_banner",
             "gesture_walk_lockout_speed", "gesture_walk_debounce_sec",
-            "face_cx", "face_cy", "face_size", "pip_pos", "pip_scale"):
+            "face_cx", "face_cy", "face_size", "pip_pos", "pip_scale",
+            "pip_x", "pip_y", "pip_crop", "slide_zoom"):
     assert key in cal, f"calibration.json missing {key}"
 print("DEMO_DEFAULTS_OK")

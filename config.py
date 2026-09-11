@@ -124,8 +124,12 @@ HUD_LOCK_DURATION   = 4.0      # How long a target lock reticle stays locked
 FACE_CX_RATIO = 0.5    # face center X as screen fraction (0.1 - 0.9, clamped)
 FACE_CY_RATIO = None   # face center Y fraction, or None = stock per-orientation ratio
 FACE_SIZE     = 1.0    # face scale multiplier (0.4 - 2.0, clamped)
-PIP_POS       = "BR"   # PiP corner: TR, TL, BR, BL
+PIP_POS       = "BR"   # PiP corner: TR, TL, BR, BL, or FREE (PIP_X/PIP_Y fractions)
 PIP_SCALE     = 1.0    # PiP size multiplier (0.3 - 1.5, clamped)
+PIP_X         = 1.0    # FREE-mode anchor X fraction (0 - 1)
+PIP_Y         = 1.0    # FREE-mode anchor Y fraction (0 - 1)
+PIP_CROP      = [0.0, 0.0, 1.0, 1.0]  # camera crop fractions [x, y, w, h] — cut ceiling/floor out
+SLIDE_ZOOM    = 1.0    # event-slide scale (0.5 - 1.0 letterboxed; 1.0 = full-bleed)
 
 # ── Calibration & Live Sightline Controls ────────────────────────────────────
 MIRROR_GAZE_X         = False    # Invert horizontal eye gaze tracking (toggle if robot eye looks opposite to you)
@@ -215,6 +219,7 @@ def load_calibration():
     global GESTURE_WALK_LOCKOUT_SPEED, GESTURE_WALK_DEBOUNCE_SEC
     global SWIPE_ANIMATION_ENABLED, GESTURE_COOLDOWN_SEC
     global FACE_CX_RATIO, FACE_CY_RATIO, FACE_SIZE, PIP_POS, PIP_SCALE
+    global PIP_X, PIP_Y, PIP_CROP, SLIDE_ZOOM
     if os.path.exists(CALIBRATION_FILE):
         try:
             with open(CALIBRATION_FILE, "r") as f:
@@ -254,8 +259,17 @@ def load_calibration():
             FACE_CY_RATIO = None if _cy is None else min(0.9, max(0.1, float(_cy)))
             FACE_SIZE = min(2.0, max(0.4, float(data.get("face_size", FACE_SIZE))))
             _pp = str(data.get("pip_pos", PIP_POS)).upper()
-            PIP_POS = _pp if _pp in ("TR", "TL", "BR", "BL") else "BR"
+            PIP_POS = _pp if _pp in ("TR", "TL", "BR", "BL", "FREE") else "BR"
             PIP_SCALE = min(1.5, max(0.3, float(data.get("pip_scale", PIP_SCALE))))
+            PIP_X = min(1.0, max(0.0, float(data.get("pip_x", PIP_X))))
+            PIP_Y = min(1.0, max(0.0, float(data.get("pip_y", PIP_Y))))
+            try:
+                _cr = [min(1.0, max(0.0, float(v))) for v in data.get("pip_crop", PIP_CROP)]
+                if len(_cr) == 4 and _cr[2] > 0.05 and _cr[3] > 0.05:
+                    PIP_CROP = _cr
+            except Exception:
+                pass
+            SLIDE_ZOOM = min(1.0, max(0.5, float(data.get("slide_zoom", SLIDE_ZOOM))))
         except Exception:
             pass
 
@@ -299,6 +313,10 @@ def save_calibration():
         "face_size": FACE_SIZE,
         "pip_pos": PIP_POS,
         "pip_scale": PIP_SCALE,
+        "pip_x": PIP_X,
+        "pip_y": PIP_Y,
+        "pip_crop": list(PIP_CROP),
+        "slide_zoom": SLIDE_ZOOM,
     }
     try:
         with open(CALIBRATION_FILE, "w") as f:

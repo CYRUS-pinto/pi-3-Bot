@@ -708,11 +708,43 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     <button id="pipBL" onclick="setPipPos('BL')">↙ BL</button>
     <button id="pipBR" class="mint" onclick="setPipPos('BR')">↘ BR</button>
   </div>
+  <div style="margin-bottom:8px;">
+    <button id="pipFREE" onclick="setPipPos('FREE')" style="width:100%; padding:9px 8px; font-size:11px; font-weight:bold;">✋ FREE PLACE — drag X/Y below</button>
+  </div>
+  <div style="margin-bottom:8px;">
+    <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;">
+      <span>📹 BOX X</span><span id="lblPipX" style="color:var(--text); font-weight:bold;">100%</span>
+    </div>
+    <input type="range" id="rngPipX" min="0" max="100" step="1" value="100" oninput="onLayoutChange()" style="width:100%; accent-color:var(--cyan);">
+  </div>
+  <div style="margin-bottom:8px;">
+    <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;">
+      <span>📹 BOX Y</span><span id="lblPipY" style="color:var(--text); font-weight:bold;">100%</span>
+    </div>
+    <input type="range" id="rngPipY" min="0" max="100" step="1" value="100" oninput="onLayoutChange()" style="width:100%; accent-color:var(--cyan);">
+  </div>
   <div style="margin-bottom:10px;">
     <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;">
       <span>📹 CAMERA BOX SIZE</span><span id="lblPipSize" style="color:var(--text); font-weight:bold;">100%</span>
     </div>
     <input type="range" id="rngPipSize" min="30" max="150" step="5" value="100" oninput="onLayoutChange()" style="width:100%; accent-color:var(--cyan);">
+  </div>
+  <div style="font-size:11px; color:var(--muted); margin-bottom:6px;">✂️ CAMERA CROP (cut ceiling/floor: X / Y / W / H %)</div>
+  <div class="grid grid-4" style="margin-bottom:10px;">
+    <div><div style="font-size:10px; color:var(--muted);">X <span id="lblCropX">0</span></div><input type="range" id="rngCropX" min="0" max="80" step="1" value="0" oninput="onLayoutChange()" style="width:100%; accent-color:var(--cyan);"></div>
+    <div><div style="font-size:10px; color:var(--muted);">Y <span id="lblCropY">0</span></div><input type="range" id="rngCropY" min="0" max="80" step="1" value="0" oninput="onLayoutChange()" style="width:100%; accent-color:var(--cyan);"></div>
+    <div><div style="font-size:10px; color:var(--muted);">W <span id="lblCropW">100</span></div><input type="range" id="rngCropW" min="20" max="100" step="1" value="100" oninput="onLayoutChange()" style="width:100%; accent-color:var(--cyan);"></div>
+    <div><div style="font-size:10px; color:var(--muted);">H <span id="lblCropH">100</span></div><input type="range" id="rngCropH" min="20" max="100" step="1" value="100" oninput="onLayoutChange()" style="width:100%; accent-color:var(--cyan);"></div>
+  </div>
+  <div style="margin-bottom:10px;">
+    <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;">
+      <span>🖥️ SLIDE ZOOM</span><span id="lblZoom" style="color:var(--text); font-weight:bold;">100%</span>
+    </div>
+    <input type="range" id="rngZoom" min="50" max="100" step="1" value="100" oninput="onLayoutChange()" style="width:100%; accent-color:var(--gold);">
+  </div>
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+    <span style="font-size:11px; color:var(--muted);">✋ HAND LANDMARKS</span>
+    <span id="lmBadge" style="font-size:10px; padding:2px 8px; border-radius:4px; font-weight:bold; color:var(--muted); border:1px solid var(--border);">OFF — motion only</span>
   </div>
   <div style="display:flex; gap:8px;">
     <button onclick="resetLayout()" style="flex:1; padding:10px 8px; font-size:11px; font-weight:bold; background:#161b22; border-color:#2a3242; color:#ff8c41;">↩ FACE CENTER + AUTO HEIGHT</button>
@@ -1352,27 +1384,81 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     const fy = +document.getElementById('rngFaceY').value;
     const fs = +document.getElementById('rngFaceSize').value;
     const ps = +document.getElementById('rngPipSize').value;
+    const px = +document.getElementById('rngPipX').value;
+    const py = +document.getElementById('rngPipY').value;
+    const cx = +document.getElementById('rngCropX').value;
+    const cy = +document.getElementById('rngCropY').value;
+    const cw = +document.getElementById('rngCropW').value;
+    const ch = +document.getElementById('rngCropH').value;
+    const zm = +document.getElementById('rngZoom').value;
     document.getElementById('lblFaceX').textContent = fx + '%';
     document.getElementById('lblFaceY').textContent = fy + '%';
     document.getElementById('lblFaceSize').textContent = fs + '%';
     document.getElementById('lblPipSize').textContent = ps + '%';
-    layoutPost({face_cx: fx / 100, face_cy: fy / 100, face_size: fs / 100, pip_scale: ps / 100});
+    document.getElementById('lblPipX').textContent = px + '%';
+    document.getElementById('lblPipY').textContent = py + '%';
+    document.getElementById('lblCropX').textContent = cx;
+    document.getElementById('lblCropY').textContent = cy;
+    document.getElementById('lblCropW').textContent = cw;
+    document.getElementById('lblCropH').textContent = ch;
+    document.getElementById('lblZoom').textContent = zm + '%';
+    layoutPost({face_cx: fx / 100, face_cy: fy / 100, face_size: fs / 100,
+      pip_scale: ps / 100, pip_x: px / 100, pip_y: py / 100,
+      pip_crop: [cx / 100, cy / 100, cw / 100, ch / 100], slide_zoom: zm / 100});
   }
   function setPipPos(corner) {
     ['TL','TR','BL','BR'].forEach(c => {
       const b = document.getElementById('pip' + c);
       if (b) b.className = (c === corner) ? 'mint' : '';
     });
+    const bf = document.getElementById('pipFREE');
+    if (bf) bf.className = (corner === 'FREE') ? 'mint' : '';
     layoutPost({pip_pos: corner}, '📹 CAMERA BOX → ' + corner);
   }
   function resetLayout() {
     document.getElementById('rngFaceX').value = 50;
     document.getElementById('rngFaceY').value = 44;
     document.getElementById('rngFaceSize').value = 100;
+    document.getElementById('rngPipX').value = 100;
+    document.getElementById('rngPipY').value = 100;
+    document.getElementById('rngPipSize').value = 100;
+    document.getElementById('rngCropX').value = 0;
+    document.getElementById('rngCropY').value = 0;
+    document.getElementById('rngCropW').value = 100;
+    document.getElementById('rngCropH').value = 100;
+    document.getElementById('rngZoom').value = 100;
     document.getElementById('lblFaceX').textContent = '50%';
     document.getElementById('lblFaceY').textContent = 'AUTO';
     document.getElementById('lblFaceSize').textContent = '100%';
-    layoutPost({face_cx: 0.5, face_cy: null, face_size: 1.0}, '↩ FACE CENTERED');
+    layoutPost({face_cx: 0.5, face_cy: null, face_size: 1.0, pip_pos: 'BR',
+      pip_x: 1.0, pip_y: 1.0, pip_scale: 1.0, pip_crop: [0, 0, 1, 1], slide_zoom: 1.0},
+      '↩ LAYOUT RESET');
+  }
+  function syncLayoutUI(c) {
+    if (!c) return;
+    const set = (id, v) => {
+      const r = document.getElementById(id);
+      if (r && document.activeElement !== r) r.value = v;
+    };
+    if (c.face_cx !== undefined) { set('rngFaceX', c.face_cx * 100); calib_face_lbl('lblFaceX', c.face_cx * 100, '%'); }
+    if (c.face_cy !== undefined && c.face_cy !== null) { set('rngFaceY', c.face_cy * 100); calib_face_lbl('lblFaceY', c.face_cy * 100, '%'); }
+    if (c.face_size !== undefined) { set('rngFaceSize', c.face_size * 100); calib_face_lbl('lblFaceSize', c.face_size * 100, '%'); }
+    if (c.pip_scale !== undefined) { set('rngPipSize', c.pip_scale * 100); calib_face_lbl('lblPipSize', c.pip_scale * 100, '%'); }
+    if (c.pip_x !== undefined) { set('rngPipX', c.pip_x * 100); calib_face_lbl('lblPipX', c.pip_x * 100, '%'); }
+    if (c.pip_y !== undefined) { set('rngPipY', c.pip_y * 100); calib_face_lbl('lblPipY', c.pip_y * 100, '%'); }
+    if (c.slide_zoom !== undefined) { set('rngZoom', c.slide_zoom * 100); calib_face_lbl('lblZoom', c.slide_zoom * 100, '%'); }
+    if (c.pip_pos !== undefined) {
+      ['TL','TR','BL','BR'].forEach(x => {
+        const b = document.getElementById('pip' + x);
+        if (b) b.className = (x === c.pip_pos) ? 'mint' : '';
+      });
+      const bf = document.getElementById('pipFREE');
+      if (bf) bf.className = (c.pip_pos === 'FREE') ? 'mint' : '';
+    }
+  }
+  function calib_face_lbl(id, v, suffix) {
+    const l = document.getElementById(id);
+    if (l) l.textContent = Math.round(v) + suffix;
   }
 
   function toggleGestureMirror() {
@@ -2108,6 +2194,19 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
         if (st.calibration.mirror_gaze_x !== undefined || st.calibration.mirror_gesture_x !== undefined) {
           updateMirrorUI(st.calibration.mirror_gaze_x, st.calibration.mirror_gesture_x);
         }
+        syncLayoutUI(st.calibration);
+      }
+      const lmb = document.getElementById('lmBadge');
+      if (lmb) {
+        if (st.landmarks) {
+          lmb.textContent = 'ON — confirmed swipes';
+          lmb.style.color = '#38eb91';
+          lmb.style.borderColor = 'rgba(56,235,145,0.3)';
+        } else {
+          lmb.textContent = 'OFF — motion only';
+          lmb.style.color = '';
+          lmb.style.borderColor = '';
+        }
       }
 
       // 5. Auto Cycle & Gesture Mode sync
@@ -2350,6 +2449,7 @@ class WebRemoteHandler(BaseHTTPRequestHandler):
                 "external_audio_detected": ext_detected,
                 "speech": speech_info,
                 "thermal": therm,
+                "landmarks": bool(getattr(getattr(ACTIVE_TRACKER, "_landmarks", None), "ok", False)),
                 "auto_cycle_enabled": getattr(config, "AUTO_CYCLE_ENABLED", True),
                 "event_display_time": getattr(config, "EVENT_DISPLAY_TIME", 8.0),
                 "gesture_mode": getattr(config, "GESTURE_MODE", "HORIZONTAL_SWIPE"),
@@ -2379,6 +2479,15 @@ class WebRemoteHandler(BaseHTTPRequestHandler):
                     "swipe_anim_enabled": getattr(config, "SWIPE_ANIMATION_ENABLED", True),
                     "hand_detected": bool(getattr(ACTIVE_TRACKER, "hand_detected", False)),
                     "latest_gesture": str(getattr(ACTIVE_TRACKER, "latest_gesture", "NONE")),
+                    "face_cx": getattr(config, "FACE_CX_RATIO", 0.5),
+                    "face_cy": getattr(config, "FACE_CY_RATIO", None),
+                    "face_size": getattr(config, "FACE_SIZE", 1.0),
+                    "pip_pos": getattr(config, "PIP_POS", "BR"),
+                    "pip_scale": getattr(config, "PIP_SCALE", 1.0),
+                    "pip_x": getattr(config, "PIP_X", 1.0),
+                    "pip_y": getattr(config, "PIP_Y", 1.0),
+                    "pip_crop": list(getattr(config, "PIP_CROP", [0, 0, 1, 1])),
+                    "slide_zoom": getattr(config, "SLIDE_ZOOM", 1.0),
                 }
             }
             self.send_response(200)
