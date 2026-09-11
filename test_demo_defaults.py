@@ -29,12 +29,13 @@ assert abs(config.PIP_SCALE - 1.0) < 1e-9, config.PIP_SCALE
 assert abs(config.PIP_X - 1.0) < 1e-9 and abs(config.PIP_Y - 1.0) < 1e-9
 assert list(config.PIP_CROP) == [0.0, 0.0, 1.0, 1.0], config.PIP_CROP
 assert abs(config.SLIDE_ZOOM - 1.0) < 1e-9, config.SLIDE_ZOOM
+assert abs(config.SLIDE_X - 0.5) < 1e-9 and abs(config.SLIDE_Y - 0.5) < 1e-9
 
 # Shipped calibration file must carry the demo keys (values may be user-toggled at runtime).
 cal = json.load(open("calibration.json"))
 for key in ("screen_rotation", "auto_cycle_enabled", "gesture_mode", "show_gesture_banner",
             "gesture_walk_lockout_speed", "gesture_walk_debounce_sec",
             "face_cx", "face_cy", "face_size", "pip_pos", "pip_scale",
-            "pip_x", "pip_y", "pip_crop", "slide_zoom"):
+            "pip_x", "pip_y", "pip_crop", "slide_zoom", "slide_x", "slide_y"):
     assert key in cal, f"calibration.json missing {key}"
 print("DEMO_DEFAULTS_OK")

@@ -922,6 +922,12 @@ def main():
                 if "slide_zoom" in payload:
                     config.SLIDE_ZOOM = min(1.0, max(0.5, float(payload["slide_zoom"])))
                     _layout_touched = True
+                if "slide_x" in payload:
+                    config.SLIDE_X = min(1.0, max(0.0, float(payload["slide_x"])))
+                    _layout_touched = True
+                if "slide_y" in payload:
+                    config.SLIDE_Y = min(1.0, max(0.0, float(payload["slide_y"])))
+                    _layout_touched = True
                 if _layout_touched:
                     renderer.face._invalidate()  # recompute geometry next draw; strip cache re-keys on rect
                     banner_items.append("LAYOUT UPDATED")
@@ -1170,7 +1176,9 @@ def main():
                 # the cached static until the next slide change.
                 _skey = ("E" if in_event else "F", play.event_idx if in_event else -1,
                          _rot_now, canvas_w, canvas_h, _sw, _sh,
-                         round(min(1.0, max(0.5, float(getattr(config, "SLIDE_ZOOM", 1.0)))), 3))
+                         round(min(1.0, max(0.5, float(getattr(config, "SLIDE_ZOOM", 1.0)))), 3),
+                         round(min(1.0, max(0.0, float(getattr(config, "SLIDE_X", 0.5)))), 3),
+                         round(min(1.0, max(0.0, float(getattr(config, "SLIDE_Y", 0.5)))), 3))
                 if _skey != _strip_static_key:
                     _strip_static_prev = _strip_static
                     # base: bg smooth-upscaled once (flat void/vignette upscale cleanly)
@@ -1183,8 +1191,10 @@ def main():
                         if _z < 0.999:
                             _zw, _zh = max(1, int(sc_w * _z)), max(1, int(sc_h * _z))
                             _zc = pygame.transform.smoothscale(sc_canvas, (_zw, _zh))
+                            _zx = min(1.0, max(0.0, float(getattr(config, "SLIDE_X", 0.5))))
+                            _zy = min(1.0, max(0.0, float(getattr(config, "SLIDE_Y", 0.5))))
                             sc_canvas.fill(config.VOID)
-                            sc_canvas.blit(_zc, ((sc_w - _zw) // 2, (sc_h - _zh) // 2))
+                            sc_canvas.blit(_zc, (int(_zx * (sc_w - _zw)), int(_zy * (sc_h - _zh))))
                             del _zc
                     else:
                         sc_canvas.blit(sc_label, (sc_label_x, sc_label_y))

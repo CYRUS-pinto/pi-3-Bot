@@ -130,6 +130,8 @@ PIP_X         = 1.0    # FREE-mode anchor X fraction (0 - 1)
 PIP_Y         = 1.0    # FREE-mode anchor Y fraction (0 - 1)
 PIP_CROP      = [0.0, 0.0, 1.0, 1.0]  # camera crop fractions [x, y, w, h] — cut ceiling/floor out
 SLIDE_ZOOM    = 1.0    # event-slide scale (0.5 - 1.0 letterboxed; 1.0 = full-bleed)
+SLIDE_X       = 0.5    # slide anchor X fraction in the letterbox (0 - 1)
+SLIDE_Y       = 0.5    # slide anchor Y fraction in the letterbox (0 - 1)
 
 # ── Calibration & Live Sightline Controls ────────────────────────────────────
 MIRROR_GAZE_X         = False    # Invert horizontal eye gaze tracking (toggle if robot eye looks opposite to you)
@@ -219,7 +221,7 @@ def load_calibration():
     global GESTURE_WALK_LOCKOUT_SPEED, GESTURE_WALK_DEBOUNCE_SEC
     global SWIPE_ANIMATION_ENABLED, GESTURE_COOLDOWN_SEC
     global FACE_CX_RATIO, FACE_CY_RATIO, FACE_SIZE, PIP_POS, PIP_SCALE
-    global PIP_X, PIP_Y, PIP_CROP, SLIDE_ZOOM
+    global PIP_X, PIP_Y, PIP_CROP, SLIDE_ZOOM, SLIDE_X, SLIDE_Y
     if os.path.exists(CALIBRATION_FILE):
         try:
             with open(CALIBRATION_FILE, "r") as f:
@@ -270,6 +272,8 @@ def load_calibration():
             except Exception:
                 pass
             SLIDE_ZOOM = min(1.0, max(0.5, float(data.get("slide_zoom", SLIDE_ZOOM))))
+            SLIDE_X = min(1.0, max(0.0, float(data.get("slide_x", SLIDE_X))))
+            SLIDE_Y = min(1.0, max(0.0, float(data.get("slide_y", SLIDE_Y))))
         except Exception:
             pass
 
@@ -317,6 +321,8 @@ def save_calibration():
         "pip_y": PIP_Y,
         "pip_crop": list(PIP_CROP),
         "slide_zoom": SLIDE_ZOOM,
+        "slide_x": SLIDE_X,
+        "slide_y": SLIDE_Y,
     }
     try:
         with open(CALIBRATION_FILE, "w") as f:
