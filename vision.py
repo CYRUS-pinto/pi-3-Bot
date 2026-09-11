@@ -650,6 +650,19 @@ class OpticalGestureEngine:
                         max_disp = abs(dx)
                         best_sweep = ("HORIZ", dx)
 
+                # Flick (kid-style fast short stroke): relaxed distance, strict speed+dominance.
+                # ponytail: non-tech users (kids especially) flick instead of sweeping — the 0.18
+                # full sweep never fires for them. Flick fills best_sweep; a real sweep still
+                # upgrades it below. No parallax check: walking bodies move <0.3, flick needs >0.55.
+                # Only when no HORIZ candidate yet (never overrides a proper sweep).
+                if best_sweep is None:
+                    _fmin = getattr(config, "GESTURE_FLICK_DISTANCE", 0.10) / eff_sens_h
+                    _fspd = getattr(config, "GESTURE_FLICK_SPEED", 0.55)
+                    if abs(dx) >= _fmin and abs(dx) > (1.50 * abs(dy)) and speed_x > _fspd:
+                        if abs(dx) > max_disp:
+                            max_disp = abs(dx)
+                            best_sweep = ("HORIZ", dx)
+
                 # Vertical Swipe (UP -> Face, DOWN -> Slides, if 4-WAY mode enabled)
                 if getattr(config, "GESTURE_MODE", "4_WAY") != "HORIZONTAL_SWIPE":
                     inv_y = getattr(config, "INVERT_CAMERA_Y", False) or self.invert_y
@@ -666,6 +679,14 @@ class OpticalGestureEngine:
                     # SWIPE DOWN: hand moves downward — clean vertical dominance
                     elif dy > 0 and orig_cy <= 0.70 and curr_cy >= 0.20:
                         if abs(dy) >= v_min and abs(dy) > (1.20 * abs(dx)) and speed_y > 0.12:
+                            if abs(dy) > max_disp:
+                                max_disp = abs(dy)
+                                best_sweep = ("VERT", dy)
+                    # Vertical flick: same kid-style shortcut as horizontal (short + fast).
+                    if best_sweep is None and getattr(config, "GESTURE_MODE", "4_WAY") != "HORIZONTAL_SWIPE":
+                        _vfmin = getattr(config, "GESTURE_FLICK_VDISTANCE", 0.08) / eff_sens_v
+                        _vfspd = getattr(config, "GESTURE_FLICK_SPEED", 0.55)
+                        if abs(dy) >= _vfmin and abs(dy) > (1.50 * abs(dx)) and speed_y > _vfspd:
                             if abs(dy) > max_disp:
                                 max_disp = abs(dy)
                                 best_sweep = ("VERT", dy)

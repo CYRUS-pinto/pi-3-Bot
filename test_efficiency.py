@@ -47,6 +47,24 @@ def test_synthetic_sweep_still_fires():
     print("SWEEP_OK", fired)
 
 
+def test_kid_flick_fires_without_full_sweep():
+    # Flick: 3 fast frames, ~0.15 total displacement — BELOW the 0.18 full-sweep
+    # minimum. Must still fire via the flick shortcut (kids flick, they don't sweep).
+    eng = OpticalGestureEngine()
+    eng.process(_black(), face_boxes=[])
+    fired = None
+    for i in range(5):
+        f = _black()
+        x = 200 + i * 25  # short fast run, chest height
+        f[150:210, x:x + 60] = 255
+        r = eng.process(f, face_boxes=[])
+        if isinstance(r, str) and "SWIPE" in r:
+            fired = r
+            break
+    assert fired is not None, "kid flick fired nothing — non-tech users can't swipe?"
+    print("FLICK_OK", fired)
+
+
 def test_caches_bounded():
     import pygame
     pygame.init()
@@ -70,6 +88,7 @@ def test_caches_bounded():
 
 test_still_frames_cost_nothing_and_fire_nothing()
 test_synthetic_sweep_still_fires()
+test_kid_flick_fires_without_full_sweep()
 test_caches_bounded()
 
 config.GESTURE_COOLDOWN_SEC, config.GESTURE_SWIPE_DISTANCE, \

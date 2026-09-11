@@ -1307,6 +1307,18 @@ def main():
                     hud.draw(canvas, total_t)
                 else:
                     card_mgr.draw(canvas, play)
+                    # ponytail: slide zoom/position must work in the FULL pipeline too — rot-0
+                    # landscape never runs the strip path, so strip-only zoom was dead there.
+                    # ~2-3ms during EVENT only (smoothscale down + centered blit).
+                    _fz = min(1.0, max(0.5, float(getattr(config, "SLIDE_ZOOM", 1.0))))
+                    _fx = min(1.0, max(0.0, float(getattr(config, "SLIDE_X", 0.5))))
+                    _fy = min(1.0, max(0.0, float(getattr(config, "SLIDE_Y", 0.5))))
+                    if _fz < 0.999 or abs(_fx - 0.5) > 0.001 or abs(_fy - 0.5) > 0.001:
+                        _zw, _zh = max(1, int(canvas_w * _fz)), max(1, int(canvas_h * _fz))
+                        _zs = pygame.transform.smoothscale(canvas, (_zw, _zh))
+                        canvas.fill(config.VOID)
+                        canvas.blit(_zs, (int(_fx * (canvas_w - _zw)), int(_fy * (canvas_h - _zh))))
+                        del _zs
 
                 # Draw sci-fi dialogue subtitle capsule when speaking
                 if speech.is_speaking and speech.current_subtitle:
