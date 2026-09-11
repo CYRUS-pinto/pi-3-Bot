@@ -91,6 +91,28 @@ def _strip_scale_for(rot: int, cw: int, ch: int, sw: int, sh: int) -> int | None
     return sx if sx == sy else None
 
 
+def pip_geom(pip_surf, cw: int, ch: int):
+    """PiP video origin + display size honoring PIP_POS corner and PIP_SCALE.
+    Returns (surf, px, py, dw, dh), downscaling the source when the corner box is smaller."""
+    s = min(1.5, max(0.3, float(getattr(config, "PIP_SCALE", 1.0))))
+    pw, ph = pip_surf.get_width(), pip_surf.get_height()
+    dw = max(48, int(min(pw, max(96, int(cw * 0.34))) * s))
+    dh = max(1, int(dw * ph / pw))
+    if (dw, dh) != (pw, ph):
+        pip_surf = pygame.transform.smoothscale(pip_surf, (dw, dh))
+    mx, my = max(16, int(cw * 0.02)), max(16, int(ch * 0.03))
+    pos = str(getattr(config, "PIP_POS", "BR")).upper()
+    if pos == "TL":
+        px, py = mx, my + 20
+    elif pos == "TR":
+        px, py = cw - dw - mx, my + 20
+    elif pos == "BL":
+        px, py = mx, ch - dh - my
+    else:
+        px, py = cw - dw - mx, ch - dh - my
+    return pip_surf, px, py, dw, dh
+
+
 def _strip_map_point(x: int, y: int, cw: int, ch: int, angle: int, s: int) -> tuple[int, int]:
     """Canvas pixel -> screen pixel through exact-90 rotation + integer scale."""
     if angle == 90:
@@ -841,6 +863,29 @@ def main():
                     config.GESTURE_SENS_UP = float(payload["sens_up"])
                 if "sens_down" in payload:
                     config.GESTURE_SENS_DOWN = float(payload["sens_down"])
+                # ── Layout Studio: move/resize face + PiP live from the pocket remote ──
+                _layout_touched = False
+                if "face_cx" in payload:
+                    config.FACE_CX_RATIO = min(0.9, max(0.1, float(payload["face_cx"])))
+                    _layout_touched = True
+                if "face_cy" in payload:
+                    _v = payload["face_cy"]
+                    config.FACE_CY_RATIO = None if _v is None else min(0.9, max(0.1, float(_v)))
+                    _layout_touched = True
+                if "face_size" in payload:
+                    config.FACE_SIZE = min(2.0, max(0.4, float(payload["face_size"])))
+                    _layout_touched = True
+                if "pip_pos" in payload:
+                    _pp = str(payload["pip_pos"]).upper()
+                    if _pp in ("TR", "TL", "BR", "BL"):
+                        config.PIP_POS = _pp
+                        _layout_touched = True
+                if "pip_scale" in payload:
+                    config.PIP_SCALE = min(1.5, max(0.3, float(payload["pip_scale"])))
+                    _layout_touched = True
+                if _layout_touched:
+                    renderer.face._invalidate()  # recompute geometry next draw; strip cache re-keys on rect
+                    banner_items.append("LAYOUT UPDATED")
                 config.save_calibration()
                 if banner_items:
                     last_gesture_banner = f"[{' // '.join(banner_items)}]"
@@ -1159,13 +1204,7 @@ def main():
                     from vision import get_latest_pip_surface
                     _pip = get_latest_pip_surface()
                     if _pip is not None:
-                        _pw, _ph = _pip.get_width(), _pip.get_height()
-                        _dw = min(_pw, max(96, int(canvas_w * 0.34)))
-                        if _dw != _pw:
-                            _pip = pygame.transform.smoothscale(_pip, (_dw, max(1, int(_dw * _ph / _pw))))
-                            _pw, _ph = _pip.get_width(), _pip.get_height()
-                        _px0 = canvas_w - _pw - max(16, int(canvas_w * 0.02))
-                        _py0 = canvas_h - _ph - max(16, int(canvas_h * 0.03))
+                        _pip, _px0, _py0, _pw, _ph = pip_geom(_pip, canvas_w, canvas_h)
                         if _strip_pip_tag_key != id(fonts["xs"]):
                             _strip_pip_tag = fonts["xs"].render(
                                 "LIVE OPTICAL RECON [PiP]", True, (56, 235, 145))
@@ -1269,13 +1308,7 @@ def main():
             from vision import get_latest_pip_surface
             pip_surf = get_latest_pip_surface()
             if pip_surf:
-                pw, ph = pip_surf.get_width(), pip_surf.get_height()
-                _dw = min(pw, max(96, int(canvas_w * 0.34)))
-                if _dw != pw:
-                    pip_surf = pygame.transform.smoothscale(pip_surf, (_dw, max(1, int(_dw * ph / pw))))
-                    pw, ph = pip_surf.get_width(), pip_surf.get_height()
-                px = canvas_w - pw - max(16, int(canvas_w * 0.02))
-                py = canvas_h - ph - max(16, int(canvas_h * 0.03))
+                pip_surf, px, py, pw, ph = pip_geom(pip_surf, canvas_w, canvas_h)
                 # High-tech border and badge
                 pygame.draw.rect(canvas, (10, 14, 20), (px - 2, py - 20, pw + 4, ph + 22), border_radius=6)
                 pygame.draw.rect(canvas, (56, 235, 145), (px - 2, py - 20, pw + 4, ph + 22), width=1, border_radius=6)

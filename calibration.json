@@ -30,5 +30,10 @@
   "auto_cycle_enabled": true,
   "gesture_mode": "4_WAY",
   "gesture_walk_lockout_speed": 0.12,
-  "gesture_walk_debounce_sec": 1.2
+  "gesture_walk_debounce_sec": 1.2,
+  "face_cx": 0.5,
+  "face_cy": null,
+  "face_size": 1.0,
+  "pip_pos": "BR",
+  "pip_scale": 1.0
 }

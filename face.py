@@ -280,11 +280,15 @@ class TARSFace:
             mouth_w_ratio = config.MOUTH_W_RATIO
             mouth_h_ratio = config.MOUTH_H_RATIO
 
-        ow  = max(44, int(self.sw * eye_w_ratio))
-        oh  = max(64, int(self.sh * eye_h_ratio))
-        gap = max(24, int(self.sw * gap_ratio))
-        cx  = self.sw // 2
-        cy  = int(self.sh * face_y_ratio)
+        # Layout Studio placement (pocket remote): position + scale freely, defaults = stock look.
+        _fs = min(2.0, max(0.4, float(getattr(config, "FACE_SIZE", 1.0))))
+        _cxr = min(0.9, max(0.1, float(getattr(config, "FACE_CX_RATIO", 0.5))))
+        _cyr = getattr(config, "FACE_CY_RATIO", None)
+        ow  = max(44, int(self.sw * eye_w_ratio * _fs))
+        oh  = max(64, int(self.sh * eye_h_ratio * _fs))
+        gap = max(24, int(self.sw * gap_ratio * _fs))
+        cx  = min(self.sw - 1, max(1, int(self.sw * _cxr)))
+        cy  = min(self.sh - 1, max(1, int(self.sh * (min(0.9, max(0.1, float(_cyr))) if _cyr is not None else face_y_ratio))))
         lx  = cx - gap // 2 - ow
         rx  = cx + gap // 2
         ins = max(3, int(ow * 0.146))
@@ -292,8 +296,8 @@ class TARSFace:
         mouth_gap = max(30, int(self.sh * (0.045 if is_portrait else 0.052)))
         mcy = cy + oh // 2 + mouth_gap
 
-        mw = max(80, int(self.sw * mouth_w_ratio))
-        mh = max(18, int(self.sh * mouth_h_ratio))
+        mw = max(80, int(self.sw * mouth_w_ratio * _fs))
+        mh = max(18, int(self.sh * mouth_h_ratio * _fs))
 
         # Dynamic head-turn safe margin
         head_margin_x = max(36, int(ow * 0.40))

@@ -118,6 +118,15 @@ HUD_AUTO_SCAN       = False    # Set False so real camera tracker has 100% autho
 HUD_SCAN_INTERVAL   = 14.0     # Time between autonomous scans
 HUD_LOCK_DURATION   = 4.0      # How long a target lock reticle stays locked
 
+# ── Layout Studio (pocket-remote placement: move/resize anything) ────────────
+# Defaults reproduce the exact shipped look. Drag sliders in the web remote;
+# values persist to calibration.json and apply live (face recomputes geometry).
+FACE_CX_RATIO = 0.5    # face center X as screen fraction (0.1 - 0.9, clamped)
+FACE_CY_RATIO = None   # face center Y fraction, or None = stock per-orientation ratio
+FACE_SIZE     = 1.0    # face scale multiplier (0.4 - 2.0, clamped)
+PIP_POS       = "BR"   # PiP corner: TR, TL, BR, BL
+PIP_SCALE     = 1.0    # PiP size multiplier (0.3 - 1.5, clamped)
+
 # ── Calibration & Live Sightline Controls ────────────────────────────────────
 MIRROR_GAZE_X         = False    # Invert horizontal eye gaze tracking (toggle if robot eye looks opposite to you)
 MIRROR_GESTURE_X      = True     # Match user perspective (Hand to TV Right -> Next Slide)
@@ -205,6 +214,7 @@ def load_calibration():
     global EVENT_DISPLAY_TIME, AUTO_CYCLE_ENABLED, GESTURE_MODE
     global GESTURE_WALK_LOCKOUT_SPEED, GESTURE_WALK_DEBOUNCE_SEC
     global SWIPE_ANIMATION_ENABLED, GESTURE_COOLDOWN_SEC
+    global FACE_CX_RATIO, FACE_CY_RATIO, FACE_SIZE, PIP_POS, PIP_SCALE
     if os.path.exists(CALIBRATION_FILE):
         try:
             with open(CALIBRATION_FILE, "r") as f:
@@ -239,6 +249,13 @@ def load_calibration():
             GESTURE_MODE = str(data.get("gesture_mode", GESTURE_MODE))
             GESTURE_WALK_LOCKOUT_SPEED = float(data.get("gesture_walk_lockout_speed", GESTURE_WALK_LOCKOUT_SPEED))
             GESTURE_WALK_DEBOUNCE_SEC = float(data.get("gesture_walk_debounce_sec", GESTURE_WALK_DEBOUNCE_SEC))
+            FACE_CX_RATIO = min(0.9, max(0.1, float(data.get("face_cx", FACE_CX_RATIO if FACE_CX_RATIO is not None else 0.5))))
+            _cy = data.get("face_cy", FACE_CY_RATIO)
+            FACE_CY_RATIO = None if _cy is None else min(0.9, max(0.1, float(_cy)))
+            FACE_SIZE = min(2.0, max(0.4, float(data.get("face_size", FACE_SIZE))))
+            _pp = str(data.get("pip_pos", PIP_POS)).upper()
+            PIP_POS = _pp if _pp in ("TR", "TL", "BR", "BL") else "BR"
+            PIP_SCALE = min(1.5, max(0.3, float(data.get("pip_scale", PIP_SCALE))))
         except Exception:
             pass
 
@@ -277,6 +294,11 @@ def save_calibration():
         "gesture_mode": GESTURE_MODE,
         "gesture_walk_lockout_speed": GESTURE_WALK_LOCKOUT_SPEED,
         "gesture_walk_debounce_sec": GESTURE_WALK_DEBOUNCE_SEC,
+        "face_cx": FACE_CX_RATIO,
+        "face_cy": FACE_CY_RATIO,
+        "face_size": FACE_SIZE,
+        "pip_pos": PIP_POS,
+        "pip_scale": PIP_SCALE,
     }
     try:
         with open(CALIBRATION_FILE, "w") as f:

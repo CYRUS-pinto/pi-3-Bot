@@ -675,6 +675,50 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
   </div>
 </div>
 
+<!-- 🎛️ LAYOUT STUDIO — move/resize face + camera box freely, changes apply live -->
+<div style="background:#0d1117; border:1px solid var(--border); border-radius:12px; padding:12px; margin-bottom:14px;">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+    <div style="font-size:11px; font-weight:bold; letter-spacing:1.5px; color:var(--gold); display:flex; align-items:center; gap:6px;">
+      <span style="font-size:13px;">🎛️</span> LAYOUT STUDIO
+    </div>
+    <div style="font-size:10px; color:var(--muted);">LIVE — drag &amp; watch TV</div>
+  </div>
+  <div style="margin-bottom:8px;">
+    <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;">
+      <span>🤖 FACE X</span><span id="lblFaceX" style="color:var(--text); font-weight:bold;">50%</span>
+    </div>
+    <input type="range" id="rngFaceX" min="10" max="90" step="1" value="50" oninput="onLayoutChange()" style="width:100%; accent-color:var(--gold);">
+  </div>
+  <div style="margin-bottom:8px;">
+    <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;">
+      <span>🤖 FACE Y</span><span id="lblFaceY" style="color:var(--text); font-weight:bold;">AUTO</span>
+    </div>
+    <input type="range" id="rngFaceY" min="10" max="90" step="1" value="44" oninput="onLayoutChange()" style="width:100%; accent-color:var(--gold);">
+  </div>
+  <div style="margin-bottom:10px;">
+    <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;">
+      <span>🔍 FACE SIZE</span><span id="lblFaceSize" style="color:var(--text); font-weight:bold;">100%</span>
+    </div>
+    <input type="range" id="rngFaceSize" min="40" max="200" step="5" value="100" oninput="onLayoutChange()" style="width:100%; accent-color:var(--gold);">
+  </div>
+  <div style="font-size:11px; color:var(--muted); margin-bottom:6px;">📹 CAMERA BOX CORNER</div>
+  <div class="grid grid-4" style="margin-bottom:8px;">
+    <button id="pipTL" onclick="setPipPos('TL')">↖ TL</button>
+    <button id="pipTR" onclick="setPipPos('TR')">↗ TR</button>
+    <button id="pipBL" onclick="setPipPos('BL')">↙ BL</button>
+    <button id="pipBR" class="mint" onclick="setPipPos('BR')">↘ BR</button>
+  </div>
+  <div style="margin-bottom:10px;">
+    <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:2px;">
+      <span>📹 CAMERA BOX SIZE</span><span id="lblPipSize" style="color:var(--text); font-weight:bold;">100%</span>
+    </div>
+    <input type="range" id="rngPipSize" min="30" max="150" step="5" value="100" oninput="onLayoutChange()" style="width:100%; accent-color:var(--cyan);">
+  </div>
+  <div style="display:flex; gap:8px;">
+    <button onclick="resetLayout()" style="flex:1; padding:10px 8px; font-size:11px; font-weight:bold; background:#161b22; border-color:#2a3242; color:#ff8c41;">↩ FACE CENTER + AUTO HEIGHT</button>
+  </div>
+</div>
+
 <!-- 🔊 SMART AUDIO ROUTER & PHONE SPEAKER -->
 <!-- Hidden audio pipelines pre-unlocked for mobile Android Chrome -->
 <audio id="tarsAudio" preload="auto" playsinline style="display:none;"></audio>
@@ -1291,6 +1335,44 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
 
   function toggleCameraMirror() {
     toggleMirrorGaze();
+  }
+
+  // 🎛️ Layout Studio — live move/resize, persists via /api/calibrate
+  function layoutPost(partial, toast) {
+    if (navigator.vibrate) navigator.vibrate(20);
+    fetch('/api/calibrate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(partial)
+    }).catch(()=>{});
+    if (toast) showToast(toast);
+  }
+  function onLayoutChange() {
+    const fx = +document.getElementById('rngFaceX').value;
+    const fy = +document.getElementById('rngFaceY').value;
+    const fs = +document.getElementById('rngFaceSize').value;
+    const ps = +document.getElementById('rngPipSize').value;
+    document.getElementById('lblFaceX').textContent = fx + '%';
+    document.getElementById('lblFaceY').textContent = fy + '%';
+    document.getElementById('lblFaceSize').textContent = fs + '%';
+    document.getElementById('lblPipSize').textContent = ps + '%';
+    layoutPost({face_cx: fx / 100, face_cy: fy / 100, face_size: fs / 100, pip_scale: ps / 100});
+  }
+  function setPipPos(corner) {
+    ['TL','TR','BL','BR'].forEach(c => {
+      const b = document.getElementById('pip' + c);
+      if (b) b.className = (c === corner) ? 'mint' : '';
+    });
+    layoutPost({pip_pos: corner}, '📹 CAMERA BOX → ' + corner);
+  }
+  function resetLayout() {
+    document.getElementById('rngFaceX').value = 50;
+    document.getElementById('rngFaceY').value = 44;
+    document.getElementById('rngFaceSize').value = 100;
+    document.getElementById('lblFaceX').textContent = '50%';
+    document.getElementById('lblFaceY').textContent = 'AUTO';
+    document.getElementById('lblFaceSize').textContent = '100%';
+    layoutPost({face_cx: 0.5, face_cy: null, face_size: 1.0}, '↩ FACE CENTERED');
   }
 
   function toggleGestureMirror() {
