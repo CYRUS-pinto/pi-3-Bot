@@ -311,11 +311,18 @@ class TARSFace:
 
         self._srect = pygame.Rect(fx, fy, fw, fh)
         self._surf  = pygame.Surface((fw, fh)).convert()
-        if self.bg is not None and self.bg.get_width() >= fr and self.bg.get_height() >= fb:
-            self._bg_slice = self.bg.subsurface(self._srect).copy()
-        else:
-            self._bg_slice = pygame.Surface((fw, fh)).convert()
-            self._bg_slice.fill(config.VOID)
+        # ponytail: free placement can push the rect partly off-canvas — subsurface()
+        # raises outside the surface (killed a boot 2026-09-11), while blit() clips safely.
+        # So: slice the INTERSECTION, void-fill the rest; blits stay untouched (they clip).
+        self._bg_slice = pygame.Surface((fw, fh)).convert()
+        self._bg_slice.fill(config.VOID)
+        if self.bg is not None:
+            _ix0, _iy0 = max(0, fx), max(0, fy)
+            _ix1, _iy1 = min(self.bg.get_width(), fx + fw), min(self.bg.get_height(), fy + fh)
+            if _ix1 > _ix0 and _iy1 > _iy0:
+                self._bg_slice.blit(
+                    self.bg.subsurface(pygame.Rect(_ix0, _iy0, _ix1 - _ix0, _iy1 - _iy0)),
+                    (_ix0 - fx, _iy0 - fy))
 
         self._geom = (ow, oh, gap, cx, cy, lx, rx, ins, mcy, mw, mh, fx, fy, fw, fh)
 
