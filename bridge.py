@@ -549,9 +549,16 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
       📍 CAM: CENTER
     </button>
   </div>
+  <div style="font-size:10px; color:var(--muted); letter-spacing:1px; margin-bottom:4px;">SCREEN ORIENTATION (DIRECT):</div>
+  <div class="grid grid-4" style="margin-bottom:8px;">
+    <button id="rot0" class="mint" onclick="setScreenRot(0)" style="padding:10px; font-size:11px;">0°</button>
+    <button id="rot90" onclick="setScreenRot(90)" style="padding:10px; font-size:11px;">90°</button>
+    <button id="rot180" onclick="setScreenRot(180)" style="padding:10px; font-size:11px;">180°</button>
+    <button id="rot270" onclick="setScreenRot(270)" style="padding:10px; font-size:11px;">270°</button>
+  </div>
   <div class="grid grid-2" style="margin-bottom:10px;">
-    <button id="btnRotateScreen" onclick="rotateScreen()" class="cyan" style="padding:10px; font-size:11px;">
-      🔄 SCREEN ORIENTATION: 0°
+    <button id="btnRotateScreen" onclick="rotateScreen()" style="padding:10px; font-size:11px;">
+      🔄 CYCLE SCREEN
     </button>
     <button id="btnRotateCam" onclick="rotateCamera()" class="cyan" style="padding:10px; font-size:11px;">
       📷 CAMERA ORIENTATION: 0°
@@ -2024,15 +2031,28 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     const order = [0, 90, 180, 270];
     let idx = order.indexOf(currentScreenRot);
     currentScreenRot = order[(idx + 1) % order.length];
-    const b = document.getElementById('btnRotateScreen');
-    if (b) b.textContent = '🔄 SCREEN ORIENTATION: ' + currentScreenRot + '°';
+    setScreenRot(currentScreenRot);
+  }
+
+  function setScreenRot(deg) {
+    if (navigator.vibrate) navigator.vibrate(30);
+    currentScreenRot = deg;
+    syncRotButtons(deg);
     const fs = document.getElementById('footerStatus');
-    fs.textContent = 'SCREEN ORIENTATION SET: ' + currentScreenRot + '°';
+    if (fs) fs.textContent = 'SCREEN ORIENTATION SET: ' + deg + '°';
+    showToast('🖥️ SCREEN → ' + deg + '°');
     fetch('/api/display_control', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({cmd: 'rotate_screen', rotation: currentScreenRot})
+      body: JSON.stringify({cmd: 'rotate_screen', rotation: deg})
     }).catch(()=>{});
+  }
+
+  function syncRotButtons(deg) {
+    [0, 90, 180, 270].forEach(d => {
+      const b = document.getElementById('rot' + d);
+      if (b) b.className = (d === deg) ? 'mint' : '';
+    });
   }
 
   function rotateCamera() {
@@ -2211,6 +2231,10 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
         }
         if (st.calibration.mirror_gaze_x !== undefined || st.calibration.mirror_gesture_x !== undefined) {
           updateMirrorUI(st.calibration.mirror_gaze_x, st.calibration.mirror_gesture_x);
+        }
+        if (st.calibration.screen_rotation !== undefined) {
+          currentScreenRot = st.calibration.screen_rotation;
+          syncRotButtons(currentScreenRot);
         }
         syncLayoutUI(st.calibration);
       }
@@ -2475,6 +2499,7 @@ class WebRemoteHandler(BaseHTTPRequestHandler):
                     "mirror_x": getattr(config, "MIRROR_GAZE_X", config.MIRROR_CAMERA_X),
                     "mirror_gaze_x": getattr(config, "MIRROR_GAZE_X", config.MIRROR_CAMERA_X),
                     "mirror_gesture_x": getattr(config, "MIRROR_GESTURE_X", False),
+                    "screen_rotation": getattr(config, "SCREEN_ROTATION", 0),
                     "invert_y": config.INVERT_CAMERA_Y,
                     "camera_position": config.CAMERA_POSITION,
                     "monitor_diag": config.MONITOR_DIAG_INCHES,
