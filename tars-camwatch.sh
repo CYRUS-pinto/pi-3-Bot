@@ -66,11 +66,21 @@ while true; do
     if stream_alive; then
         : # healthy — stay quiet
     else
-        log "stream dead, (re)starting IP Webcam server"
-        if start_app_server; then
-            log "stream alive"
+        # ponytail 2026-09-12: a forward can be listed yet dead (stale transport after USB
+        # re-enumeration — proven live at the event). Rebind FIRST; only touch the app if the
+        # fresh forward is still dry.
+        $ADB forward --remove tcp:8090 >/dev/null 2>&1
+        sleep 1
+        ensure_forward
+        if stream_alive; then
+            log "forward was stale, rebound — stream alive"
         else
-            log "still dead after app start attempts, retrying"
+            log "stream dead, (re)starting IP Webcam server"
+            if start_app_server; then
+                log "stream alive"
+            else
+                log "still dead after app start attempts, retrying"
+            fi
         fi
     fi
     sleep 15
