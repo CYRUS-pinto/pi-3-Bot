@@ -536,6 +536,21 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
       [ANIM: ON]
     </button>
   </div>
+
+  <div class="grid grid-3" style="margin-top:6px;">
+    <button id="btnKindSwipe" onclick="toggleKind('swipe')" class="mint" style="padding:10px 4px; font-size:11px;">
+      [SWIPE: ON]
+    </button>
+    <button id="btnKindHold" onclick="toggleKind('hold')" class="mint" style="padding:10px 4px; font-size:11px;">
+      [HOLD: ON]
+    </button>
+    <button id="btnKindTwohand" onclick="toggleKind('twohand')" class="mint" style="padding:10px 4px; font-size:11px;">
+      [2-HAND: ON]
+    </button>
+  </div>
+  <div style="margin-top:4px;">
+    <span style="font-size:9px; color:#555d6e;">KINDS ARE ISOLATED &mdash; OFF MEANS ZERO CROSS-TALK. HOLD = MOST ACCURATE.</span>
+  </div>
   <div class="grid grid-2" style="margin-top:6px;">
     <button id="btnTogglePip" onclick="toggleCameraPip()" style="padding:10px; font-size:11px; background:#161b22; border-color:#2a3242; color:#848896;">
       [CAMERA PiP: OFF]
@@ -2286,6 +2301,44 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     }).catch(()=>{});
   }
 
+  // ── Per-kind gesture toggles (swipe / hold / 2-hand). Each kind is hard-isolated
+  // server-side; turning one off removes it AND its cross-talk. States sync from
+  // /api/status every poll (see status loop below).
+  let kindSwipe = true, kindHold = true, kindTwohand = true;
+  function paintKindButtons() {
+    const map = [['btnKindSwipe', kindSwipe, 'SWIPE'], ['btnKindHold', kindHold, 'HOLD'], ['btnKindTwohand', kindTwohand, '2-HAND']];
+    for (const [id, on, label] of map) {
+      const b = document.getElementById(id);
+      if (!b) continue;
+      b.textContent = '[' + label + ': ' + (on ? 'ON' : 'OFF') + ']';
+      b.className = on ? 'mint' : '';
+      b.style.borderColor = on ? 'var(--mint)' : '#2a3242';
+      b.style.color = on ? 'var(--mint)' : '#848896';
+    }
+  }
+  function toggleKind(which) {
+    if (navigator.vibrate) navigator.vibrate(30);
+    if (which === 'swipe') kindSwipe = !kindSwipe;
+    else if (which === 'hold') kindHold = !kindHold;
+    else kindTwohand = !kindTwohand;
+    paintKindButtons();
+    fetch('/api/calibrate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({swipe_enabled: kindSwipe, hold_enabled: kindHold, twohand_enabled: kindTwohand})
+    }).then(() => {
+      const fs = document.getElementById('footerStatus');
+      if (fs) fs.textContent = 'GESTURE KINDS — SWIPE:' + (kindSwipe ? 'ON' : 'OFF') + ' HOLD:' + (kindHold ? 'ON' : 'OFF') + ' 2-HAND:' + (kindTwohand ? 'ON' : 'OFF');
+    }).catch(()=>{});
+  }
+  function syncKindButtons(cal) {
+    if (!cal) return;
+    if (cal.gesture_swipe_enabled !== undefined) kindSwipe = !!cal.gesture_swipe_enabled;
+    if (cal.gesture_hold_enabled !== undefined) kindHold = !!cal.gesture_hold_enabled;
+    if (cal.gesture_twohand_enabled !== undefined) kindTwohand = !!cal.gesture_twohand_enabled;
+    paintKindButtons();
+  }
+
   // currentGestureMode declared above at initialization block
   function updateGestureModeUI(mode) {
     currentGestureMode = mode || 'HORIZONTAL_SWIPE';
@@ -2625,6 +2678,7 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
         if (st.calibration.show_pip !== undefined) updatePipButton(st.calibration.show_pip);
         if (st.calibration.hud_enabled !== undefined) updateDiagButton(st.calibration.hud_enabled);
         if (st.calibration.gesture_swipe_enabled !== undefined) updateGestureButton(st.calibration.gesture_swipe_enabled);
+        syncKindButtons(st.calibration);
         const hb = document.getElementById('handBadge');
         if (hb) {
           if (st.calibration.hand_detected) {
@@ -3016,6 +3070,8 @@ class WebRemoteHandler(BaseHTTPRequestHandler):
                     "show_diagnostics": config.SHOW_DIAGNOSTICS,
                     "hud_enabled": config.HUD_ENABLED,
                     "gesture_swipe_enabled": getattr(config, "GESTURE_SWIPE_ENABLED", True),
+                    "gesture_hold_enabled": getattr(config, "GESTURE_HOLD_ENABLED", True),
+                    "gesture_twohand_enabled": getattr(config, "GESTURE_TWOHAND_ENABLED", True),
                     "gesture_mode": getattr(config, "GESTURE_MODE", "HORIZONTAL_SWIPE"),
                     "gesture_cooldown": getattr(config, "GESTURE_COOLDOWN_SEC", 1.00),
                     "swipe_anim_enabled": getattr(config, "SWIPE_ANIMATION_ENABLED", True),
@@ -3304,7 +3360,7 @@ class WebRemoteHandler(BaseHTTPRequestHandler):
                     "show_pip": config.SHOW_CAMERA_PIP,
                     "show_hud": config.HUD_ENABLED,
                     "show_diagnostics": config.SHOW_DIAGNOSTICS,
-                    "gesture_enabled": getattr(config, "GESTURE_SWIPE_ENABLED", True),
+                    "gesture_enabled": bool(getattr(config, "GESTURE_SWIPE_ENABLED", True) or getattr(config, "GESTURE_HOLD_ENABLED", True) or getattr(config, "GESTURE_TWOHAND_ENABLED", True)),
                     "gesture_mode": getattr(config, "GESTURE_MODE", "HORIZONTAL_SWIPE"),
                     "swipe_anim_enabled": getattr(config, "SWIPE_ANIMATION_ENABLED", True),
                     "gesture_cooldown": getattr(config, "GESTURE_COOLDOWN_SEC", 1.00),

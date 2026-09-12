@@ -246,6 +246,7 @@ def load_calibration():
     global MIRROR_GAZE_X, MIRROR_GESTURE_X, MIRROR_CAMERA_X, INVERT_CAMERA_Y, CAMERA_POSITION, MONITOR_DIAG_INCHES
     global COUCH_DIST_METERS, GAZE_SENSITIVITY_X, GAZE_SENSITIVITY_Y, GAZE_OFFSET_X, GAZE_OFFSET_Y
     global SHOW_CAMERA_PIP, SHOW_DIAGNOSTICS, HUD_ENABLED, GESTURE_SWIPE_ENABLED, GESTURE_SWIPE_SENSITIVITY
+    global GESTURE_HOLD_ENABLED, GESTURE_TWOHAND_ENABLED
     global GESTURE_SENS_LEFT, GESTURE_SENS_RIGHT, GESTURE_SENS_UP, GESTURE_SENS_DOWN
     global SCREEN_ROTATION, CAMERA_ROTATION, SHOW_GESTURE_BANNER
     global EVENT_DISPLAY_TIME, AUTO_CYCLE_ENABLED, GESTURE_MODE
@@ -276,6 +277,8 @@ def load_calibration():
             SHOW_DIAGNOSTICS = bool(data.get("show_diagnostics", SHOW_DIAGNOSTICS))
             HUD_ENABLED = bool(data.get("hud_enabled", HUD_ENABLED))
             GESTURE_SWIPE_ENABLED = bool(data.get("gesture_swipe_enabled", GESTURE_SWIPE_ENABLED))
+            GESTURE_HOLD_ENABLED = bool(data.get("gesture_hold_enabled", GESTURE_HOLD_ENABLED))
+            GESTURE_TWOHAND_ENABLED = bool(data.get("gesture_twohand_enabled", GESTURE_TWOHAND_ENABLED))
             GESTURE_SWIPE_SENSITIVITY = float(data.get("gesture_sens", GESTURE_SWIPE_SENSITIVITY))
             GESTURE_SENS_LEFT = float(data.get("sens_left", GESTURE_SENS_LEFT))
             GESTURE_SENS_RIGHT = float(data.get("sens_right", GESTURE_SENS_RIGHT))
@@ -370,6 +373,8 @@ def save_calibration():
         "show_diagnostics": SHOW_DIAGNOSTICS,
         "hud_enabled": HUD_ENABLED,
         "gesture_swipe_enabled": GESTURE_SWIPE_ENABLED,
+        "gesture_hold_enabled": GESTURE_HOLD_ENABLED,
+        "gesture_twohand_enabled": GESTURE_TWOHAND_ENABLED,
         "gesture_sens": GESTURE_SWIPE_SENSITIVITY,
         "sens_left": GESTURE_SENS_LEFT,
         "sens_right": GESTURE_SENS_RIGHT,

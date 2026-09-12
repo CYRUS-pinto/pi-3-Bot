@@ -979,6 +979,17 @@ def main():
                 if "gesture_debug" in payload:
                     config.GESTURE_DEBUG_LOGS = bool(payload["gesture_debug"])
                     banner_items.append(f"GESTURE LOGS: {'ON' if config.GESTURE_DEBUG_LOGS else 'OFF'}")
+                # ponytail kinds 2026-09-12: per-kind toggles from the pocket remote. Each kind is
+                # hard-isolated in vision.py, so turning one off removes it AND its cross-talk.
+                if "swipe_enabled" in payload:
+                    config.GESTURE_SWIPE_ENABLED = bool(payload["swipe_enabled"])
+                    banner_items.append(f"SWIPE: {'ON' if config.GESTURE_SWIPE_ENABLED else 'OFF'}")
+                if "hold_enabled" in payload:
+                    config.GESTURE_HOLD_ENABLED = bool(payload["hold_enabled"])
+                    banner_items.append(f"HOLD: {'ON' if config.GESTURE_HOLD_ENABLED else 'OFF'}")
+                if "twohand_enabled" in payload:
+                    config.GESTURE_TWOHAND_ENABLED = bool(payload["twohand_enabled"])
+                    banner_items.append(f"2-HAND: {'ON' if config.GESTURE_TWOHAND_ENABLED else 'OFF'}")
                 for _fk, _fattr in (("foam_l", "FOAM_L"), ("foam_t", "FOAM_T"),
                                     ("foam_r", "FOAM_R"), ("foam_b", "FOAM_B")):
                     if _fk in payload:
@@ -1115,11 +1126,18 @@ def main():
                     renderer.invalidate_full()
                     config.tlog("Vision", f"Calibration updated -> {' // '.join(banner_items)}")
             elif cmd in ("toggle_gesture", "set_gesture"):
+                # Master switch: drives ALL kinds together (a mute must actually mute).
                 if "enabled" in payload:
-                    config.GESTURE_SWIPE_ENABLED = bool(payload["enabled"])
+                    _all = bool(payload["enabled"])
                 else:
-                    config.GESTURE_SWIPE_ENABLED = not getattr(config, "GESTURE_SWIPE_ENABLED", True)
+                    _any = bool(getattr(config, "GESTURE_SWIPE_ENABLED", True) or getattr(config, "GESTURE_HOLD_ENABLED", True) or getattr(config, "GESTURE_TWOHAND_ENABLED", True))
+                    _all = not _any
+                config.GESTURE_SWIPE_ENABLED = _all
+                config.GESTURE_HOLD_ENABLED = _all
+                config.GESTURE_TWOHAND_ENABLED = _all
                 config.save_calibration()
+                last_gesture_banner = f"[GESTURES: {'ON' if _all else 'OFF'}]"
+                last_gesture_banner_until = total_t + 1.8
             elif cmd in ("toggle_gesture_mode", "set_gesture_mode"):
                 if "mode" in payload:
                     config.GESTURE_MODE = str(payload["mode"])

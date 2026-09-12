@@ -711,6 +711,10 @@ class OpticalGestureEngine:
 
         # 6. Holographic Virtual Screen Sweep Recognizer (Relative Displacement, No Center Lockout)
         def evaluate_virtual_screen_sweep(history, current_time) -> str | None:
+            # ponytail kinds 2026-09-12: hard isolation — swipe-kind off means NO sweep evaluation
+            # at all (no confirm accumulation, no cross-talk with holds).
+            if not getattr(config, "GESTURE_SWIPE_ENABLED", True):
+                return None
             if len(history) < 3 or (current_time - self.last_swipe_time <= cooldown):
                 return None
             # Travel veto: presenter crossing the room -> hold fire, keep history (no wipe).
@@ -1521,7 +1525,10 @@ class UniversalVisionTracker:
                     if _lr is not None:
                         self._last_open = (_lr[2], time.monotonic())
                         self.hand_tip = (_lr[0], _lr[1])  # steadier marker than the motion centroid
-            if self.gesture_engine is not None and config.GESTURE_SWIPE_ENABLED:
+            # ponytail kinds 2026-09-12: engine runs when ANY kind is on (master + kinds compose;
+            # all-off skips hand tracking entirely and saves the heat).
+            _any_kind = bool(config.GESTURE_SWIPE_ENABLED or getattr(config, "GESTURE_HOLD_ENABLED", True) or getattr(config, "GESTURE_TWOHAND_ENABLED", True))
+            if self.gesture_engine is not None and _any_kind:
                 try:
                     # Presenter FIRST: the engine reads face_boxes[0] as the ruler (distance scale),
                     # the shield anchor, and the walk-gate reference — all must follow the sticky
