@@ -1152,6 +1152,21 @@ class UniversalVisionTracker:
             ]
             self._dispatch_telemetry()
 
+    def request_reconnect(self):
+        """Button-safe instant reconnect: tears the grabber down; the AI loop rediscovers
+        within ~2s on its own. Never blocks (the old path ran the whole multi-second
+        probe chain inside the HTTP request AND no-op'd on stale-but-open grabbers)."""
+        try:
+            if self._grabber is not None:
+                try:
+                    self._grabber.release()
+                except Exception:
+                    pass
+                self._grabber = None
+            config.tlog("VisionTracker", "Reconnect requested -> rediscovering camera")
+        except Exception:
+            pass
+
     def _ensure_grabber(self):
         """Connects to the fastest camera source available (USB tethered phones, WiFi IP webcams, or local cameras)."""
         if self._grabber is not None and self._grabber.isOpened():
@@ -1183,6 +1198,7 @@ class UniversalVisionTracker:
     def _run_ai_loop(self):
         """Dedicated AI worker: runs neural network / cascade face detection asynchronously."""
         last_source_check = 0.0
+        last_fresh_t = time.time()  # ponytail: auto-heal — open-but-frozen grabbers get torn down below
         last_proc_ts = 0.0  # ponytail: feed is 8.7fps, AI targets 22 — without this, ~60% of resize+YuNet+gesture runs re-process the identical frame
         fps_counter = 0
         fps_timer = time.time()
@@ -1205,8 +1221,17 @@ class UniversalVisionTracker:
             _, frame_ts, _ = self._grabber.get_latest_frame()
             if frame_ts == last_proc_ts:
                 time.sleep(0.005)  # ponytail: stale frame — drain thread hasn't delivered a new one; skip ~25ms of duplicate inference
+                if time.time() - last_fresh_t > 3.0:
+                    # frozen-but-open stream (phone rebooted/died mid-hold): tear down, rediscover
+                    try:
+                        self._grabber.release()
+                    except Exception:
+                        pass
+                    self._grabber = None
+                    config.tlog("VisionTracker", "Frozen stream detected -> auto-rediscovering camera")
                 continue
             last_proc_ts = frame_ts
+            last_fresh_t = time.time()
 
             fh, fw = frame.shape[:2]
             detected_faces = []

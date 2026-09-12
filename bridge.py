@@ -3173,7 +3173,7 @@ class WebRemoteHandler(BaseHTTPRequestHandler):
             try:
                 from vision import ACTIVE_TRACKER
                 if ACTIVE_TRACKER is not None:
-                    ACTIVE_TRACKER._ensure_grabber()
+                    ACTIVE_TRACKER.request_reconnect()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Access-Control-Allow-Origin", "*")
