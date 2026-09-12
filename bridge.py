@@ -884,7 +884,14 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     <div><div style="font-size:10px; color:var(--muted);">RIGHT <span id="lblFoamR">0</span></div><input type="range" id="rngFoamR" min="0" max="40" step="1" value="0" oninput="onFoamChange()" style="width:100%; accent-color:var(--gold);"></div>
     <div><div style="font-size:10px; color:var(--muted);">BOTTOM <span id="lblFoamB">0</span></div><input type="range" id="rngFoamB" min="0" max="40" step="1" value="0" oninput="onFoamChange()" style="width:100%; accent-color:var(--gold);"></div>
   </div>
-  <button onclick="fitVisible()" class="mint" style="width:100%; padding:11px 8px; font-size:12px; font-weight:bold;">⛶ FIT SLIDES IN VISIBLE AREA</button>
+  <button onclick="fitVisible()" class="mint" style="width:100%; padding:11px 8px; font-size:12px; font-weight:bold;">⛶ FIT VISIBLE AREA</button>
+  <div style="font-size:10px; color:var(--muted); margin:8px 0 6px;">🖼️ RIG VIEWPORT (everything renders inside this window):</div>
+  <div class="grid grid-4" style="margin-bottom:8px;">
+    <div><div style="font-size:10px; color:var(--muted);">X <span id="lblViewX">0</span></div><input type="range" id="rngViewX" min="0" max="80" step="1" value="0" oninput="onViewChange()" style="width:100%; accent-color:var(--gold);"></div>
+    <div><div style="font-size:10px; color:var(--muted);">Y <span id="lblViewY">0</span></div><input type="range" id="rngViewY" min="0" max="80" step="1" value="0" oninput="onViewChange()" style="width:100%; accent-color:var(--gold);"></div>
+    <div><div style="font-size:10px; color:var(--muted);">W <span id="lblViewW">100</span></div><input type="range" id="rngViewW" min="20" max="100" step="1" value="100" oninput="onViewChange()" style="width:100%; accent-color:var(--gold);"></div>
+    <div><div style="font-size:10px; color:var(--muted);">H <span id="lblViewH">100</span></div><input type="range" id="rngViewH" min="20" max="100" step="1" value="100" oninput="onViewChange()" style="width:100%; accent-color:var(--gold);"></div>
+  </div>
   <div style="display:flex; gap:8px;">
     <button onclick="resetLayout()" style="flex:1; padding:10px 8px; font-size:11px; font-weight:bold; background:#161b22; border-color:#2a3242; color:#ff8c41;">↩ FACE CENTER + AUTO HEIGHT</button>
   </div>
@@ -1705,6 +1712,17 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     confirmN = Math.min(3, Math.max(1, confirmN + d));
     document.getElementById('lblConfirmN').textContent = confirmN + 'x';
     layoutPost({gesture_confirm_n: confirmN}, '🛡️ CONFIRM → ' + confirmN + 'x');
+  }
+  function onViewChange() {
+    const vx = +document.getElementById('rngViewX').value;
+    const vy = +document.getElementById('rngViewY').value;
+    const vw = +document.getElementById('rngViewW').value;
+    const vh = +document.getElementById('rngViewH').value;
+    document.getElementById('lblViewX').textContent = vx;
+    document.getElementById('lblViewY').textContent = vy;
+    document.getElementById('lblViewW').textContent = vw;
+    document.getElementById('lblViewH').textContent = vh;
+    layoutPost({view_x: vx / 100, view_y: vy / 100, view_w: vw / 100, view_h: vh / 100});
   }
   function onLayoutChangeHandSize() {
     const r = document.getElementById('rngHandSize');
@@ -2666,6 +2684,15 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
           const lc = document.getElementById('lblConfirmN');
           if (lc) lc.textContent = confirmN + 'x';
         }
+        [['rngViewX', 'lblViewX', 'view_x'], ['rngViewY', 'lblViewY', 'view_y'],
+         ['rngViewW', 'lblViewW', 'view_w'], ['rngViewH', 'lblViewH', 'view_h']].forEach(([rid, lid, key]) => {
+          if (st.calibration[key] !== undefined) {
+            const r = document.getElementById(rid);
+            if (r && document.activeElement !== r) r.value = Math.round(st.calibration[key] * 100);
+            const l = document.getElementById(lid);
+            if (l) l.textContent = Math.round(st.calibration[key] * 100);
+          }
+        });
         [['rngFoamL', 'lblFoamL', 'foam_l'], ['rngFoamT', 'lblFoamT', 'foam_t'],
          ['rngFoamR', 'lblFoamR', 'foam_r'], ['rngFoamB', 'lblFoamB', 'foam_b']].forEach(([rid, lid, key]) => {
           if (st.calibration[key] !== undefined) {
@@ -2964,6 +2991,10 @@ class WebRemoteHandler(BaseHTTPRequestHandler):
                     "sens_x": config.GAZE_SENSITIVITY_X,
                     "sens_y": config.GAZE_SENSITIVITY_Y,
                     "gesture_sens": getattr(config, "GESTURE_SWIPE_SENSITIVITY", 1.0),
+                    "view_x": getattr(config, "VIEW_X", 0.0),
+                    "view_y": getattr(config, "VIEW_Y", 0.0),
+                    "view_w": getattr(config, "VIEW_W", 1.0),
+                    "view_h": getattr(config, "VIEW_H", 1.0),
                     "gesture_confirm_n": getattr(config, "GESTURE_CONFIRM_N", 1),
                     "foam_l": getattr(config, "FOAM_L", 0.0),
                     "foam_t": getattr(config, "FOAM_T", 0.0),

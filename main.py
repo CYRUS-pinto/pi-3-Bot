@@ -415,6 +415,18 @@ def main():
     screen = make_screen()
     w, h   = screen.get_size()
     rot    = getattr(config, "SCREEN_ROTATION", 0)
+    view_px = view_py = 0  # rig-viewport blit offset (fullscreen = 0,0)
+
+    def _viewport_box():
+        # Rig window as (canvas_w, canvas_h, off_x, off_y). Fullscreen when VIEW is default.
+        # Smaller canvas = less draw work; void outside is filled once per geometry change.
+        _vx = min(1.0, max(0.0, float(getattr(config, "VIEW_X", 0.0))))
+        _vy = min(1.0, max(0.0, float(getattr(config, "VIEW_Y", 0.0))))
+        _vw = min(1.0, max(0.2, float(getattr(config, "VIEW_W", 1.0))))
+        _vh = min(1.0, max(0.2, float(getattr(config, "VIEW_H", 1.0))))
+        _cw, _ch = max(1, int(w * _vw)), max(1, int(h * _vh))
+        return (_cw, _ch, int(_vx * (w - _cw)), int(_vy * (h - _ch)))
+
     if rot in (90, 270) and w > h:
         # Render at reduced internal resolution to make pygame.transform.rotate fast.
         # ponytail: 0.5 → canvas at half panel res, rotated, EXACT 2x integer upscale to panel.
@@ -427,8 +439,15 @@ def main():
         # Landscape canvas drawn then rotated to portrait
         canvas = pygame.Surface((canvas_w, canvas_h)).convert()
     else:
-        canvas_w, canvas_h = w, h
-        canvas = screen
+        # ponytail: rig viewport — canvas shrinks to the visible window, blit lands offset.
+        _vcw, _vch, view_px, view_py = _viewport_box()
+        if (_vcw, _vch) == (w, h):
+            canvas_w, canvas_h = w, h
+            canvas = screen
+        else:
+            canvas_w, canvas_h = _vcw, _vch
+            canvas = pygame.Surface((canvas_w, canvas_h)).convert()
+            screen.fill(config.VOID)
     fonts  = make_fonts(canvas_w, canvas_h)
 
     from renderer import Renderer
@@ -499,6 +518,7 @@ def main():
 
     def update_canvas_geometry():
         nonlocal canvas, canvas_w, canvas_h, fonts, face_label, face_label_x, face_label_y, face_hint, face_hint_x, face_hint_y
+        nonlocal view_px, view_py
         _strip_reset()
         _build_static_layer()
         current_rot = getattr(config, "SCREEN_ROTATION", 0)
@@ -507,9 +527,16 @@ def main():
             canvas_w = max(1, int(h * _CANVAS_SCALE))
             canvas_h = max(1, int(w * _CANVAS_SCALE))
             canvas = pygame.Surface((canvas_w, canvas_h)).convert()
+            view_px = view_py = 0
         else:
-            canvas_w, canvas_h = w, h
-            canvas = screen
+            _vcw, _vch, view_px, view_py = _viewport_box()
+            if (_vcw, _vch) == (w, h):
+                canvas_w, canvas_h = w, h
+                canvas = screen
+            else:
+                canvas_w, canvas_h = _vcw, _vch
+                canvas = pygame.Surface((canvas_w, canvas_h)).convert()
+                screen.fill(config.VOID)
         fonts = make_fonts(canvas_w, canvas_h)
         renderer.resize(canvas)
         boot.resize(canvas_w, canvas_h)
@@ -704,31 +731,24 @@ def main():
                 config.save_calibration()
                 config.tlog("SlideControl", f"Slide Duration -> {config.EVENT_DISPLAY_TIME:.1f}s")
             elif cmd == "fit_visible":
-                # ponytail: FIT math lives SERVER-side (an earlier phone-side version mixed
-                # screen fractions with leftover anchors and silently fit nothing — proven by
-                # foam_l arriving while zoom stayed 1.0). Anchors are fractions of LEFTOVER space.
+                # ponytail: FIT = the rig viewport BECOMES the foam rect. Whole UI (face, slides,
+                # PiP) renders inside it natively — no per-element dodging, no resampling, and the
+                # zoom sliders return to neutral because there's nothing left to dodge.
+                # (An earlier phone-side version mixed units and silently fit nothing.)
                 _fl = min(0.4, max(0.0, float(getattr(config, "FOAM_L", 0.0))))
                 _ft = min(0.4, max(0.0, float(getattr(config, "FOAM_T", 0.0))))
                 _fr = min(0.4, max(0.0, float(getattr(config, "FOAM_R", 0.0))))
                 _fb = min(0.4, max(0.0, float(getattr(config, "FOAM_B", 0.0))))
-                _vw, _vh = max(0.1, 1 - _fl - _fr), max(0.1, 1 - _ft - _fb)
-                _zm = min(2.0, max(0.3, min(_vw, _vh)))
-                _rem = 1 - _zm
-                config.SLIDE_ZOOM = _zm
-                config.SLIDE_X = min(2.0, max(-1.0, (_fl + (_vw - _zm) / 2) / _rem if _rem > 0.01 else 0.5))
-                config.SLIDE_Y = min(2.0, max(-1.0, (_ft + (_vh - _zm) / 2) / _rem if _rem > 0.01 else 0.5))
-                _vh2 = min(1.5, max(0.2, _vh))
-                _cw2 = _vh2 * 9 / 16 / max(0.01, (canvas_w / max(1, canvas_h)))
-                _remx = 1 - _cw2
-                _remy = 1 - _vh2
-                config.VSLIDE_SCALE = _vh2
-                config.VSLIDE_X = min(2.0, max(-1.0, (_fl + (_vw - _cw2) / 2) / _remx if _remx > 0.01 else 0.5))
-                config.VSLIDE_Y = min(2.0, max(-1.0, (_ft + (_vh - _vh2) / 2) / _remy if _remy > 0.01 else 0.5))
+                config.VIEW_X, config.VIEW_Y = _fl, _ft
+                config.VIEW_W, config.VIEW_H = max(0.2, 1 - _fl - _fr), max(0.2, 1 - _ft - _fb)
+                config.SLIDE_ZOOM, config.SLIDE_X, config.SLIDE_Y = 1.0, 0.5, 0.5
+                config.VSLIDE_SCALE, config.VSLIDE_X, config.VSLIDE_Y = 0.9, 0.5, 0.5
                 config.save_calibration()
+                update_canvas_geometry()
                 renderer.face._invalidate()
-                last_gesture_banner = f"[FIT VISIBLE: zoom {_zm:.2f}]"
+                last_gesture_banner = f"[VIEWPORT FIT: {config.VIEW_W:.0%}x{config.VIEW_H:.0%}]"
                 last_gesture_banner_until = total_t + 1.6
-                config.tlog("SlideControl", f"Fit visible -> zoom {_zm:.2f} (foam L{_fl:.2f} T{_ft:.2f} R{_fr:.2f} B{_fb:.2f})")
+                config.tlog("SlideControl", f"Viewport fit -> {config.VIEW_W:.2f}x{config.VIEW_H:.2f} at ({_fl:.2f},{_ft:.2f})")
             elif cmd in ("gesture_mode", "set_gesture_mode"):
                 mode = str(payload.get("mode", "")).upper()
                 if mode in ("HORIZONTAL_SWIPE", "HORIZONTAL", "SLIDES_ONLY"):
@@ -960,6 +980,18 @@ def main():
                                     ("foam_r", "FOAM_R"), ("foam_b", "FOAM_B")):
                     if _fk in payload:
                         setattr(config, _fattr, min(0.4, max(0.0, float(payload[_fk]))))
+                _view_touched = False
+                for _vk, _vattr, _vlo, _vhi in (("view_x", "VIEW_X", 0.0, 1.0),
+                                               ("view_y", "VIEW_Y", 0.0, 1.0),
+                                               ("view_w", "VIEW_W", 0.2, 1.0),
+                                               ("view_h", "VIEW_H", 0.2, 1.0)):
+                    if _vk in payload:
+                        setattr(config, _vattr, min(_vhi, max(_vlo, float(payload[_vk]))))
+                        _view_touched = True
+                if _view_touched:
+                    update_canvas_geometry()
+                    renderer.face._invalidate()
+                    banner_items.append("VIEWPORT UPDATED")
                 # ── Layout Studio: move/resize face + PiP live from the pocket remote ──
                 _layout_touched = False
                 if "face_cx" in payload:
@@ -1718,7 +1750,7 @@ def main():
             else:
                 screen.blit(rotated, (0, 0))
         elif canvas is not screen:
-            screen.blit(canvas, (0, 0))
+            screen.blit(canvas, (view_px, view_py))  # rig viewport offset (0,0 when fullscreen)
 
         if not _strip_ran:
             pygame.display.flip()

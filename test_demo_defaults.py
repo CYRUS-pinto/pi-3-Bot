@@ -45,11 +45,14 @@ for key in ("screen_rotation", "auto_cycle_enabled", "gesture_mode", "show_gestu
             "vslide_mode", "vslide_scale", "vslide_x", "vslide_y",
             "vslide_fit", "vslide_rot", "slide_text", "slide_text_rev",
             "gesture_hand_size", "gesture_confirm_n",
-            "foam_l", "foam_t", "foam_r", "foam_b"):
+            "foam_l", "foam_t", "foam_r", "foam_b",
+            "view_x", "view_y", "view_w", "view_h"):
     assert key in cal, f"calibration.json missing {key}"
 assert isinstance(config.SLIDE_TEXT, dict) and isinstance(config.SLIDE_TEXT_REV, int)
 assert 0.5 <= config.GESTURE_HAND_SIZE <= 2.0, config.GESTURE_HAND_SIZE
 assert config.GESTURE_CONFIRM_N in (1, 2, 3), config.GESTURE_CONFIRM_N
 for _fv in ("FOAM_L", "FOAM_T", "FOAM_R", "FOAM_B"):
     assert 0.0 <= getattr(config, _fv) <= 0.4, (_fv, getattr(config, _fv))
+assert abs(config.VIEW_X) < 1e-9 and abs(config.VIEW_Y) < 1e-9
+assert abs(config.VIEW_W - 1.0) < 1e-9 and abs(config.VIEW_H - 1.0) < 1e-9
 print("DEMO_DEFAULTS_OK")

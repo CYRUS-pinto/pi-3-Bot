@@ -148,6 +148,14 @@ FOAM_L = 0.0             # visible-screen margins as fractions (thermocol eats e
 FOAM_T = 0.0
 FOAM_R = 0.0
 FOAM_B = 0.0
+# ── Rig viewport: the WHOLE UI renders inside this window (landscape path).
+# ponytail: one window beats per-element foam-dodging. Measure foam once, FIT once,
+# everything (face, slides, PiP) lives visible forever. Persists across boots.
+# (0,0,1,1) = fullscreen = zero behavior change.
+VIEW_X = 0.0
+VIEW_Y = 0.0
+VIEW_W = 1.0
+VIEW_H = 1.0
 
 # ── Calibration & Live Sightline Controls ────────────────────────────────────
 MIRROR_GAZE_X         = False    # Invert horizontal eye gaze tracking (toggle if robot eye looks opposite to you)
@@ -240,7 +248,7 @@ def load_calibration():
     global PIP_X, PIP_Y, PIP_CROP, SLIDE_ZOOM, SLIDE_X, SLIDE_Y
     global VSLIDE_MODE, VSLIDE_SCALE, VSLIDE_X, VSLIDE_Y, VSLIDE_FIT, VSLIDE_ROT
     global SLIDE_TEXT, SLIDE_TEXT_REV, GESTURE_HAND_SIZE, GESTURE_CONFIRM_N
-    global FOAM_L, FOAM_T, FOAM_R, FOAM_B
+    global FOAM_L, FOAM_T, FOAM_R, FOAM_B, VIEW_X, VIEW_Y, VIEW_W, VIEW_H
     if os.path.exists(CALIBRATION_FILE):
         try:
             with open(CALIBRATION_FILE, "r") as f:
@@ -327,6 +335,10 @@ def load_calibration():
             FOAM_T = min(0.4, max(0.0, float(data.get("foam_t", FOAM_T))))
             FOAM_R = min(0.4, max(0.0, float(data.get("foam_r", FOAM_R))))
             FOAM_B = min(0.4, max(0.0, float(data.get("foam_b", FOAM_B))))
+            VIEW_X = min(1.0, max(0.0, float(data.get("view_x", VIEW_X))))
+            VIEW_Y = min(1.0, max(0.0, float(data.get("view_y", VIEW_Y))))
+            VIEW_W = min(1.0, max(0.2, float(data.get("view_w", VIEW_W))))
+            VIEW_H = min(1.0, max(0.2, float(data.get("view_h", VIEW_H))))
         except Exception:
             pass
 
@@ -390,6 +402,10 @@ def save_calibration():
         "foam_t": FOAM_T,
         "foam_r": FOAM_R,
         "foam_b": FOAM_B,
+        "view_x": VIEW_X,
+        "view_y": VIEW_Y,
+        "view_w": VIEW_W,
+        "view_h": VIEW_H,
     }
     try:
         with open(CALIBRATION_FILE, "w") as f:

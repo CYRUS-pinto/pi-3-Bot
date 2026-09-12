@@ -55,5 +55,9 @@
   "foam_l": 0.0,
   "foam_t": 0.0,
   "foam_r": 0.0,
-  "foam_b": 0.0
+  "foam_b": 0.0,
+  "view_x": 0.0,
+  "view_y": 0.0,
+  "view_w": 1.0,
+  "view_h": 1.0
 }
