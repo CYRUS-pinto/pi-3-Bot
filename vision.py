@@ -389,6 +389,7 @@ class OpticalGestureEngine:
         self.face_history: list[tuple[float, float, float]] = []  # (fcx, fcy, timestamp)
         self.body_motion_history: list[tuple[float, float]] = []  # (body_cx, timestamp)
         self.walk_lockout_until = 0.0
+        self.walk_veto_until = 0.0       # ponytail crowds: fire veto while presenter travels (tracking continues)
         self.is_presenter_walking = False
         self.kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5)) if HAS_CV2 else None
         self.last_latency_ms = 0.0
@@ -448,12 +449,12 @@ class OpticalGestureEngine:
 
         self.is_presenter_walking = (now < self.walk_lockout_until)
         if self.is_presenter_walking:
-            # Person is actively pacing/walking across room -> suppress gestures
-            self.history.clear()
-            self.hand_detected = False
-            self.hand_box = None
-            self.last_latency_ms = (time.perf_counter() - t_start) * 1000.0
-            return None
+            # ponytail crowds 2026-09-12: presenter traveling -> VETO the fire, but KEEP TRACKING.
+            # The old code wiped history + blinded the hand + returned early, so at a busy event
+            # (people always drifting past) detection looked dead. Now the hand box keeps following
+            # and the veto only blocks firing; the instant travel stops, the next flick goes through
+            # with its wind-up intact. No-face body motion keeps the hard lockout below.
+            self.walk_veto_until = now + getattr(config, "GESTURE_WALK_DEBOUNCE_SEC", 0.65)
 
         # Zero-Copy / Re-use pre_small from YuNet if provided, else fast nearest-neighbor resize
         if pre_small is not None:
@@ -637,6 +638,11 @@ class OpticalGestureEngine:
         # 6. Holographic Virtual Screen Sweep Recognizer (Relative Displacement, No Center Lockout)
         def evaluate_virtual_screen_sweep(history, current_time) -> str | None:
             if len(history) < 3 or (current_time - self.last_swipe_time <= cooldown):
+                return None
+            # Travel veto: presenter crossing the room -> hold fire, keep history (no wipe).
+            # Wind-up survives, so the flick lands the moment they stop. Parallax below stays
+            # as the second layer for hand-moving-with-head strokes.
+            if current_time < self.walk_veto_until:
                 return None
             # ponytail 2026-09-12: settle-wait REMOVED as post-fire gate — it forced a full stop
             # between flicks (2nd flick's wind-up kept the hand "moving" so recognition never resumed).
