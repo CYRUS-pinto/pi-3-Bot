@@ -715,6 +715,12 @@ class OpticalGestureEngine:
             # at all (no confirm accumulation, no cross-talk with holds).
             if not getattr(config, "GESTURE_SWIPE_ENABLED", True):
                 return None
+            # ponytail first-timer 2026-09-12: pop-in guard. A hand appearing mid-frame (raised
+            # fast, walked into view) starts as a 1-2 frame teleport — high apparent speed, real
+            # displacement — and confirm-2 could buy it. Demand a 0.12s lived track first; genuine
+            # flicks last 0.15-0.30s anyway, so intent never notices.
+            if history and (current_time - history[0][2] < 0.12):
+                return None
             if len(history) < 3 or (current_time - self.last_swipe_time <= cooldown):
                 return None
             # Travel veto: presenter crossing the room -> hold fire, keep history (no wipe).

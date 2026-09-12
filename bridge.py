@@ -522,7 +522,7 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
   <!-- Touch Swipe Trackpad -->
   <div id="swipeTouchPad" style="padding:12px 10px; background:#161b22; border:1px dashed #2a3242; border-radius:8px; text-align:center; font-size:11px; color:#848896; margin-bottom:8px; touch-action:none; user-select:none;">
     <strong>[SWIPE THUMB HERE OR WAVE AT CAMERA]</strong><br>
-    <span style="font-size:9px; color:#555d6e;">L/R: SLIDES &bull; UP/DOWN: ROBOT FACE</span>
+    <span style="font-size:9px; color:#555d6e;">FLICK or HOLD L/R: SLIDES &bull; HOLD HIGH: FACE &bull; BOTH HANDS: OVERVIEW</span>
   </div>
 
   <div class="grid grid-3" style="margin-top:6px;">

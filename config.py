@@ -206,7 +206,7 @@ GESTURE_WALK_LOCKOUT_SPEED = 0.12 # Antigravity-validated (walkthrough synthetic
 GESTURE_WALK_DEBOUNCE_SEC  = 1.20 # ponytail: was 2.50 — 2.5s dead zone after every glance felt broken to non-tech users
 GESTURE_MAX_HAND_AREA      = 0.095# Maximum contour area fraction (0.095 = 9.5% of frame; allows extended arm)
 GESTURE_HAND_MIN_Y     = 0.10     # Interaction elevation ceiling (ignores ceiling light/fan motion)
-GESTURE_HAND_MAX_Y     = 0.80     # Interaction elevation floor (0.80 allows chest & mid-torso hand swipes)
+GESTURE_HAND_MAX_Y     = 0.88     # ponytail first-timer 2026-09-12: was 0.80 — seated users and kids gesturing from lap/table height were cut off. 0.88 keeps waist-out of frame while allowing low hands.
 GESTURE_HOLD_ENABLED   = True     # Hold-zone gestures: dwell hand in LEFT/RIGHT/TOP zone (highest accuracy — position + stillness, no shape reading)
 GESTURE_HOLD_SEC       = 0.8      # Dwell time to fire a hold (seconds). No key-repeat: must leave zone before refire
 GESTURE_HOLD_MAX_SPEED = 0.25     # Must be this still to count as holding (a swipe passing through is faster — naturally exclusive)
