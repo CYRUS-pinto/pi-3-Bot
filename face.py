@@ -303,8 +303,12 @@ class TARSFace:
         head_margin_x = max(36, int(ow * 0.40))
         head_margin_y = max(24, int(oh * 0.25))
 
-        fx = max(1 - 2 * ow, min(self.sw - 1, lx - _GLOW_MARGIN - head_margin_x))
-        fy = max(1 - 2 * oh, min(self.sh - 1, cy - oh // 2 - _GLOW_MARGIN - head_margin_y))
+        # ponytail: rect stays inside the canvas (fixed-pixel minima like the 36px head
+        # margin exceed tiny canvases otherwise — reverted a widening here that broke exactly that).
+        # Off-canvas FREEDOM still works: cx/cy ranges are wide and the bg-slice below
+        # intersects safely, so far-off centers render as partial faces, never crashes.
+        fx = max(0, min(self.sw - 1, lx - _GLOW_MARGIN - head_margin_x))
+        fy = max(0, min(self.sh - 1, cy - oh // 2 - _GLOW_MARGIN - head_margin_y))
         fr = min(self.sw, rx + ow + _GLOW_MARGIN + head_margin_x)
         fb = min(self.sh, mcy + mh // 2 + 16 + head_margin_y)
         fw, fh = max(1, fr - fx), max(1, fb - fy)
