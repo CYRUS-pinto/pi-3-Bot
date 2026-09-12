@@ -39,4 +39,15 @@ config.SLIDE_TEXT_REV = 2
 mgr._build_cards()
 restored = _pixels()
 assert (base == restored).all(), "restore differs from original?"
+
+# punch-in supersample: 2x re-render cropped to viewport must differ from naive upscale
+# (otherwise the zoom path is just magnifier mush) and must not crash
+hi = mgr.render_single(0, 1280, 720, make_fonts(1280, 720))
+assert hi.get_size() == (1280, 720)
+up = pygame.transform.smoothscale(mgr.surfaces[0], (1280, 720))
+import numpy as np
+a = pygame.surfarray.array3d(hi).astype(int)
+b = pygame.surfarray.array3d(up).astype(int)
+assert abs(a - b).mean() > 1.0, "supersample identical to upscale?"
+print("PUNCHIN_OK")
 print("SLIDETEXT_OK")

@@ -171,148 +171,153 @@ class EventCardManager:
 
     def _build_cards(self):
         self.surfaces = []
-        w, h = self.w, self.h
+        for i in range(len(EVENTS)):
+            self.surfaces.append(self.render_single(i, self.w, self.h, self.fonts))
+
+    def render_single(self, i: int, w: int, h: int, fonts: dict[str, pygame.font.Font]) -> pygame.Surface | None:
+        """Renders ONE event card at arbitrary size (zoom-in supersampling). None on bad index."""
+        if not (0 <= i < len(EVENTS)):
+            return None
+        fxs, fsm, fmd, flg, fxl, fxxl = (
+            fonts["xs"], fonts["sm"], fonts["md"],
+            fonts["lg"], fonts["xl"], fonts["xxl"],
+        )
         is_portrait = (getattr(config, "SCREEN_ORIENTATION", "AUTO") == "PORTRAIT") or (
             getattr(config, "SCREEN_ORIENTATION", "AUTO") == "AUTO" and h > w
         )
-        fxs, fsm, fmd, flg, fxl, fxxl = (
-            self.fonts["xs"], self.fonts["sm"], self.fonts["md"],
-            self.fonts["lg"], self.fonts["xl"], self.fonts["xxl"],
-        )
-
+        ev = EVENTS[i]
         pad_x  = max(28, int(w * 0.05)) if is_portrait else max(55, int(w * 0.08))
         card_w = w - pad_x * 2
+        surf = pygame.Surface((w, h)).convert()
+        surf.fill(config.VOID)
+        # ponytail: pocket-remote text overrides (SLIDE_TEXT {index: {name, desc}}).
+        # Length-capped so a phone typo can't blow the layout.
+        _ov = getattr(config, "SLIDE_TEXT", {}) or {}
+        _ov = _ov.get(str(i), {}) or {}
+        ev = dict(ev, name=str(_ov.get("name", ev["name"]))[:60],
+                  desc=str(_ov.get("desc", ev["desc"]))[:300])
 
-        for i, ev in enumerate(EVENTS):
-            surf = pygame.Surface((w, h)).convert()
-            surf.fill(config.VOID)
-            # ponytail: pocket-remote text overrides (SLIDE_TEXT {index: {name, desc}}).
-            # Length-capped so a phone typo can't blow the layout.
-            _ov = getattr(config, "SLIDE_TEXT", {}) or {}
-            _ov = _ov.get(str(i), {}) or {}
-            ev = dict(ev, name=str(_ov.get("name", ev["name"]))[:60],
-                      desc=str(_ov.get("desc", ev["desc"]))[:300])
+        # 1. Fest Header (Clean sci-fi title at upper center)
+        ky = max(26, int(h * 0.045)) if is_portrait else max(38, int(h * 0.085))
+        kicker = fxs.render("SIX FREQUENCIES. ONE EVENT HORIZON.", True, config.MUTED_DIM)
+        title  = flg.render("RESOENANCE", True, config.TEXT)
+        surf.blit(kicker, (w // 2 - kicker.get_width() // 2, ky))
+        surf.blit(title,  (w // 2 - title.get_width() // 2, ky + kicker.get_height() + 4))
 
-            # 1. Fest Header (Clean sci-fi title at upper center)
-            ky = max(26, int(h * 0.045)) if is_portrait else max(38, int(h * 0.085))
-            kicker = fxs.render("SIX FREQUENCIES. ONE EVENT HORIZON.", True, config.MUTED_DIM)
-            title  = flg.render("RESOENANCE", True, config.TEXT)
-            surf.blit(kicker, (w // 2 - kicker.get_width() // 2, ky))
-            surf.blit(title,  (w // 2 - title.get_width() // 2, ky + kicker.get_height() + 4))
+        sep_y = ky + kicker.get_height() + title.get_height() + 10
+        pygame.draw.line(surf, config.LINE, (pad_x, sep_y), (pad_x + card_w, sep_y), 1)
 
-            sep_y = ky + kicker.get_height() + title.get_height() + 10
-            pygame.draw.line(surf, config.LINE, (pad_x, sep_y), (pad_x + card_w, sep_y), 1)
+        # 2. Event Number & Category Header
+        ny = sep_y + int(h * (0.018 if is_portrait else 0.025))
+        num_surf = fxxl.render(ev["id"], True, config.MUTED_DIM)
+        cat_tag  = f"[ {ev['category']} ]"
+        cat_surf = fsm.render(cat_tag, True, config.E_NEUTRAL)
 
-            # 2. Event Number & Category Header
-            ny = sep_y + int(h * (0.018 if is_portrait else 0.025))
-            num_surf = fxxl.render(ev["id"], True, config.MUTED_DIM)
-            cat_tag  = f"[ {ev['category']} ]"
-            cat_surf = fsm.render(cat_tag, True, config.E_NEUTRAL)
+        surf.blit(num_surf, (pad_x, ny))
+        surf.blit(cat_surf, (pad_x + card_w - cat_surf.get_width(),
+                            ny + num_surf.get_height() // 2 - cat_surf.get_height() // 2))
 
-            surf.blit(num_surf, (pad_x, ny))
-            surf.blit(cat_surf, (pad_x + card_w - cat_surf.get_width(),
-                                ny + num_surf.get_height() // 2 - cat_surf.get_height() // 2))
+        # Hairline beneath category
+        dy = ny + num_surf.get_height() + 8
+        pygame.draw.line(surf, config.LINE, (pad_x, dy), (pad_x + card_w, dy), 1)
 
-            # Hairline beneath category
-            dy = ny + num_surf.get_height() + 8
-            pygame.draw.line(surf, config.LINE, (pad_x, dy), (pad_x + card_w, dy), 1)
+        # 3. Event Name
+        name_y    = dy + int(h * (0.016 if is_portrait else 0.020))
+        name_surf = fxl.render(ev["name"], True, config.TEXT)
+        surf.blit(name_surf, (pad_x, name_y))
 
-            # 3. Event Name
-            name_y    = dy + int(h * (0.016 if is_portrait else 0.020))
-            name_surf = fxl.render(ev["name"], True, config.TEXT)
-            surf.blit(name_surf, (pad_x, name_y))
+        # 4. Description (Comfortably spaced, eliminates dead voids)
+        desc_y = name_y + name_surf.get_height() + int(h * 0.014)
+        desc_max_w = card_w - (12 if is_portrait else int(card_w * 0.18))
+        after_desc_y = _render_wrapped_text(surf, fmd, ev["desc"], (195, 192, 186),
+                                           pad_x, desc_y, desc_max_w)
 
-            # 4. Description (Comfortably spaced, eliminates dead voids)
-            desc_y = name_y + name_surf.get_height() + int(h * 0.014)
-            desc_max_w = card_w - (12 if is_portrait else int(card_w * 0.18))
-            after_desc_y = _render_wrapped_text(surf, fmd, ev["desc"], (195, 192, 186),
-                                               pad_x, desc_y, desc_max_w)
+        # 5. High-tech Structured Metadata Panel
+        if is_portrait:
+            # 2x2 Grid for vertical screens
+            meta_box_y = max(after_desc_y + int(h * 0.025), int(h * 0.50))
+            meta_box_h = max(110, int(h * 0.16))
+            meta_box_w = card_w
+            pygame.draw.rect(surf, config.PANEL, (pad_x, meta_box_y, meta_box_w, meta_box_h), border_radius=6)
+            pygame.draw.rect(surf, config.LINE,  (pad_x, meta_box_y, meta_box_w, meta_box_h), width=1, border_radius=6)
 
-            # 5. High-tech Structured Metadata Panel
-            if is_portrait:
-                # 2x2 Grid for vertical screens
-                meta_box_y = max(after_desc_y + int(h * 0.025), int(h * 0.50))
-                meta_box_h = max(110, int(h * 0.16))
-                meta_box_w = card_w
-                pygame.draw.rect(surf, config.PANEL, (pad_x, meta_box_y, meta_box_w, meta_box_h), border_radius=6)
-                pygame.draw.rect(surf, config.LINE,  (pad_x, meta_box_y, meta_box_w, meta_box_h), width=1, border_radius=6)
+            mid_x = pad_x + meta_box_w // 2
+            mid_y = meta_box_y + meta_box_h // 2
+            pygame.draw.line(surf, config.LINE, (mid_x, meta_box_y + 10), (mid_x, meta_box_y + meta_box_h - 10), 1)
+            pygame.draw.line(surf, config.LINE, (pad_x + 10, mid_y), (pad_x + meta_box_w - 10, mid_y), 1)
 
-                mid_x = pad_x + meta_box_w // 2
-                mid_y = meta_box_y + meta_box_h // 2
-                pygame.draw.line(surf, config.LINE, (mid_x, meta_box_y + 10), (mid_x, meta_box_y + meta_box_h - 10), 1)
-                pygame.draw.line(surf, config.LINE, (pad_x + 10, mid_y), (pad_x + meta_box_w - 10, mid_y), 1)
+            quads = [
+                ("SCHEDULE",  ev["time"],            pad_x + 14, meta_box_y + 10, config.TEXT),
+                ("TEAM SIZE", ev["team"],            mid_x + 14, meta_box_y + 10, config.TEXT),
+                ("VENUE",     "MAIN ARENA / CAMPUS", pad_x + 14, mid_y + 10,      config.MUTED),
+                ("STATUS",    "OFFICIAL ENTRY OPEN", mid_x + 14, mid_y + 10,      config.E_HAPPY),
+            ]
+            for lbl, val, qx, qy, col in quads:
+                lbl_surf = fxs.render(lbl, True, config.MUTED_DIM)
+                val_surf = fsm.render(val, True, col)
+                surf.blit(lbl_surf, (qx, qy))
+                surf.blit(val_surf, (qx, qy + lbl_surf.get_height() + 4))
+        else:
+            meta_box_y = max(after_desc_y + int(h * 0.025), int(h * 0.58))
+            meta_box_h = max(70, int(h * 0.16))
+            meta_box_w = card_w
+            pygame.draw.rect(surf, config.PANEL, (pad_x, meta_box_y, meta_box_w, meta_box_h), border_radius=6)
+            pygame.draw.rect(surf, config.LINE,  (pad_x, meta_box_y, meta_box_w, meta_box_h), width=1, border_radius=6)
 
-                quads = [
-                    ("SCHEDULE",  ev["time"],            pad_x + 14, meta_box_y + 10, config.TEXT),
-                    ("TEAM SIZE", ev["team"],            mid_x + 14, meta_box_y + 10, config.TEXT),
-                    ("VENUE",     "MAIN ARENA / CAMPUS", pad_x + 14, mid_y + 10,      config.MUTED),
-                    ("STATUS",    "OFFICIAL ENTRY OPEN", mid_x + 14, mid_y + 10,      config.E_HAPPY),
-                ]
-                for lbl, val, qx, qy, col in quads:
-                    lbl_surf = fxs.render(lbl, True, config.MUTED_DIM)
-                    val_surf = fsm.render(val, True, col)
-                    surf.blit(lbl_surf, (qx, qy))
-                    surf.blit(val_surf, (qx, qy + lbl_surf.get_height() + 4))
-            else:
-                meta_box_y = max(after_desc_y + int(h * 0.025), int(h * 0.58))
-                meta_box_h = max(70, int(h * 0.16))
-                meta_box_w = card_w
-                pygame.draw.rect(surf, config.PANEL, (pad_x, meta_box_y, meta_box_w, meta_box_h), border_radius=6)
-                pygame.draw.rect(surf, config.LINE,  (pad_x, meta_box_y, meta_box_w, meta_box_h), width=1, border_radius=6)
+            cols = [
+                ("SCHEDULE",  ev["time"]),
+                ("TEAM SIZE", ev["team"]),
+                ("VENUE",     "MAIN CAMPUS / ARENA"),
+                ("STATUS",    "OFFICIAL ENTRY OPEN"),
+            ]
+            col_w = meta_box_w // len(cols)
+            inner_pad_y = meta_box_y + int(meta_box_h * 0.22)
+            for col_i, (lbl, val) in enumerate(cols):
+                cx_col = pad_x + col_i * col_w + 20
+                lbl_surf = fxs.render(lbl, True, config.MUTED_DIM)
+                val_surf = fsm.render(val, True, config.TEXT if col_i < 2 else config.E_HAPPY if col_i == 3 else config.MUTED)
+                surf.blit(lbl_surf, (cx_col, inner_pad_y))
+                surf.blit(val_surf, (cx_col, inner_pad_y + lbl_surf.get_height() + 6))
+                if col_i > 0:
+                    pygame.draw.line(surf, config.LINE,
+                                     (pad_x + col_i * col_w, meta_box_y + 12),
+                                     (pad_x + col_i * col_w, meta_box_y + meta_box_h - 12), 1)
 
-                cols = [
-                    ("SCHEDULE",  ev["time"]),
-                    ("TEAM SIZE", ev["team"]),
-                    ("VENUE",     "MAIN CAMPUS / ARENA"),
-                    ("STATUS",    "OFFICIAL ENTRY OPEN"),
-                ]
-                col_w = meta_box_w // len(cols)
-                inner_pad_y = meta_box_y + int(meta_box_h * 0.22)
-                for col_i, (lbl, val) in enumerate(cols):
-                    cx_col = pad_x + col_i * col_w + 20
-                    lbl_surf = fxs.render(lbl, True, config.MUTED_DIM)
-                    val_surf = fsm.render(val, True, config.TEXT if col_i < 2 else config.E_HAPPY if col_i == 3 else config.MUTED)
-                    surf.blit(lbl_surf, (cx_col, inner_pad_y))
-                    surf.blit(val_surf, (cx_col, inner_pad_y + lbl_surf.get_height() + 6))
-                    if col_i > 0:
-                        pygame.draw.line(surf, config.LINE,
-                                         (pad_x + col_i * col_w, meta_box_y + 12),
-                                         (pad_x + col_i * col_w, meta_box_y + meta_box_h - 12), 1)
+        # 6. Static Right Rail Dots
+        rail_x = w - max(16, int(w * 0.025)) if is_portrait else w - max(30, int(w * 0.035))
+        step_y = max(18, int(h * 0.028)) if is_portrait else max(22, int(h * 0.036))
+        ry0    = h // 2 - (len(EVENTS) - 1) * step_y // 2
+        for dot_i in range(len(EVENTS)):
+            dot_y = ry0 + dot_i * step_y
+            is_curr = (dot_i == i)
+            dot_col = config.E_NEUTRAL if is_curr else config.MUTED_DIM
+            radius  = 4 if is_curr else 2
+            pygame.draw.circle(surf, dot_col, (rail_x, dot_y), radius)
 
-            # 6. Static Right Rail Dots
-            rail_x = w - max(16, int(w * 0.025)) if is_portrait else w - max(30, int(w * 0.035))
-            step_y = max(18, int(h * 0.028)) if is_portrait else max(22, int(h * 0.036))
-            ry0    = h // 2 - (len(EVENTS) - 1) * step_y // 2
-            for dot_i in range(len(EVENTS)):
-                dot_y = ry0 + dot_i * step_y
-                is_curr = (dot_i == i)
-                dot_col = config.E_NEUTRAL if is_curr else config.MUTED_DIM
-                radius  = 4 if is_curr else 2
-                pygame.draw.circle(surf, dot_col, (rail_x, dot_y), radius)
+        # 7. Static Bottom Timeline Ticks
+        tick_w   = max(28, int(w * 0.035)) if is_portrait else max(45, int(w * 0.045))
+        tick_gap = 6 if is_portrait else 8
+        total_tw = len(EVENTS) * tick_w + (len(EVENTS) - 1) * tick_gap
+        tx0 = w // 2 - total_tw // 2
+        ty  = h - max(32, int(h * 0.045))
+        for tick_i in range(len(EVENTS)):
+            col = (config.E_NEUTRAL if tick_i == i
+                   else config.MUTED_DIM if tick_i < i
+                   else config.LINE)
+            pygame.draw.rect(surf, col, (tx0 + tick_i * (tick_w + tick_gap), ty, tick_w, 4), border_radius=1)
 
-            # 7. Static Bottom Timeline Ticks
-            tick_w   = max(28, int(w * 0.035)) if is_portrait else max(45, int(w * 0.045))
-            tick_gap = 6 if is_portrait else 8
-            total_tw = len(EVENTS) * tick_w + (len(EVENTS) - 1) * tick_gap
-            tx0 = w // 2 - total_tw // 2
-            ty  = h - max(32, int(h * 0.045))
-            for tick_i in range(len(EVENTS)):
-                col = (config.E_NEUTRAL if tick_i == i
-                       else config.MUTED_DIM if tick_i < i
-                       else config.LINE)
-                pygame.draw.rect(surf, col, (tx0 + tick_i * (tick_w + tick_gap), ty, tick_w, 4), border_radius=1)
+        # 8. Bottom Sci-Fi Keyboard Hint
+        if is_portrait:
+            hint_str = "RIGHT HAND SWIPE: NEXT SLIDE  //  LEFT HAND: PREV  //  SWIPE UP: FACE"
+            hint_surf = fxs.render(hint_str, True, (60, 64, 75))
+            surf.blit(hint_surf, (w // 2 - hint_surf.get_width() // 2, h - int(h * 0.025)))
+        else:
+            hint_str = "RIGHT HAND SWIPE: NEXT SLIDE  //  LEFT HAND: PREV  //  SWIPE UP: FACE  //  SPACE: ADVANCE"
+            hint_surf = fxs.render(hint_str, True, (44, 46, 52))
+            surf.blit(hint_surf, (w - hint_surf.get_width() - max(20, int(w * 0.03)), h - int(h * 0.030)))
 
-            # 8. Bottom Sci-Fi Keyboard Hint
-            if is_portrait:
-                hint_str = "RIGHT HAND SWIPE: NEXT SLIDE  //  LEFT HAND: PREV  //  SWIPE UP: FACE"
-                hint_surf = fxs.render(hint_str, True, (60, 64, 75))
-                surf.blit(hint_surf, (w // 2 - hint_surf.get_width() // 2, h - int(h * 0.025)))
-            else:
-                hint_str = "RIGHT HAND SWIPE: NEXT SLIDE  //  LEFT HAND: PREV  //  SWIPE UP: FACE  //  SPACE: ADVANCE"
-                hint_surf = fxs.render(hint_str, True, (44, 46, 52))
-                surf.blit(hint_surf, (w - hint_surf.get_width() - max(20, int(w * 0.03)), h - int(h * 0.030)))
+        return surf
 
-            self.surfaces.append(surf)
 
     def draw(self, screen: pygame.Surface, play: PlaylistController):
         """Draws event card with smooth wipe transition over the previous slide."""
@@ -583,6 +588,8 @@ def main():
     _strip_static_key = None
     _strip_static_prev = None  # ponytail: previous slide's static — reveal sweeps new over old, both hi-res
     _strip_build_frame = -1000000  # last static build frame (zoom drags throttle to 2Hz)
+    _fzoom_surf = None  # cached supersampled punch-in card (full pipeline zoom > 1)
+    _fzoom_key = None
     _strip_face_key = None
     _strip_face_surf = None
     _strip_face_xy = (0, 0)
@@ -1303,25 +1310,29 @@ def main():
                     pygame.transform.smoothscale(renderer._bg, (sc_w, sc_h), sc_canvas)
                     if in_event:
                         sc_card_mgr.draw(sc_canvas, play)
-                        # ponytail: slide zoom letterboxes below 1.0, punch-in crops above.
-                        # Paid once per slide change into the cached static — zero per-frame cost.
+                        # ponytail: slide zoom letterboxes below 1.0; above 1.0 the card is
+                        # RE-RENDERED at zoom size (render_single) instead of upscaling raster —
+                        # punch-in stays crispy because every glyph redraws at final size.
+                        # Paid once per change into the cached static — zero per-frame cost.
                         _z = min(2.0, max(0.3, float(getattr(config, "SLIDE_ZOOM", 1.0))))
+                        _zx = min(1.0, max(0.0, float(getattr(config, "SLIDE_X", 0.5))))
+                        _zy = min(1.0, max(0.0, float(getattr(config, "SLIDE_Y", 0.5))))
                         if _z < 0.999:
                             _zw, _zh = max(1, int(sc_w * _z)), max(1, int(sc_h * _z))
                             _zc = pygame.transform.smoothscale(sc_canvas, (_zw, _zh))
-                            _zx = min(1.0, max(0.0, float(getattr(config, "SLIDE_X", 0.5))))
-                            _zy = min(1.0, max(0.0, float(getattr(config, "SLIDE_Y", 0.5))))
                             sc_canvas.fill(config.VOID)
                             sc_canvas.blit(_zc, (int(_zx * (sc_w - _zw)), int(_zy * (sc_h - _zh))))
                             del _zc
                         elif _z > 1.001:
-                            _zw, _zh = max(1, int(sc_w * _z)), max(1, int(sc_h * _z))
-                            _zc = pygame.transform.smoothscale(sc_canvas, (_zw, _zh))
-                            _zx = min(1.0, max(0.0, float(getattr(config, "SLIDE_X", 0.5))))
-                            _zy = min(1.0, max(0.0, float(getattr(config, "SLIDE_Y", 0.5))))
-                            sc_canvas.fill(config.VOID)
-                            sc_canvas.blit(_zc, (int(_zx * (sc_w - _zw)), int(_zy * (sc_h - _zh))))
-                            del _zc
+                            _hw, _hh = max(1, int(sc_w * _z)), max(1, int(sc_h * _z))
+                            _hf = make_fonts(_hw, _hh)
+                            _hi = sc_card_mgr.render_single(play.event_idx, _hw, _hh, _hf)
+                            del _hf
+                            if _hi is not None:
+                                sc_canvas.fill(config.VOID)
+                                sc_canvas.blit(_hi,
+                                               (int(_zx * (sc_w - _hw)), int(_zy * (sc_h - _hh))))
+                                del _hi
                     else:
                         sc_canvas.blit(sc_label, (sc_label_x, sc_label_y))
                         sc_canvas.blit(sc_hint, (sc_hint_x, sc_hint_y))
@@ -1469,17 +1480,33 @@ def main():
                         _vskip_zoom = False
                     # ponytail: slide zoom/position must work in the FULL pipeline too — rot-0
                     # landscape never runs the strip path, so strip-only zoom was dead there.
-                    # Below 1.0 letterboxes; above 1.0 punch-in crops (blit clips). ~3ms EVENT-only.
+                    # Below 1.0 letterboxes (smoothscale down, cached look); above 1.0 the card
+                    # RE-RENDERS at zoom size so punch-in stays crispy (cached per state, ~1 blit/frame).
                     # Skipped for vslide column (it carries its own scale + position above).
                     _fz = min(2.0, max(0.3, float(getattr(config, "SLIDE_ZOOM", 1.0))))
                     _fx = min(1.0, max(0.0, float(getattr(config, "SLIDE_X", 0.5))))
                     _fy = min(1.0, max(0.0, float(getattr(config, "SLIDE_Y", 0.5))))
                     if not _vskip_zoom and (_fz < 0.999 or _fz > 1.001 or abs(_fx - 0.5) > 0.001 or abs(_fy - 0.5) > 0.001):
-                        _zw, _zh = max(1, int(canvas_w * _fz)), max(1, int(canvas_h * _fz))
-                        _zs = pygame.transform.smoothscale(canvas, (_zw, _zh))
-                        canvas.fill(config.VOID)
-                        canvas.blit(_zs, (int(_fx * (canvas_w - _zw)), int(_fy * (canvas_h - _zh))))
-                        del _zs
+                        if _fz > 1.001:
+                            _fzk = (play.event_idx, round(_fz, 3), round(_fx, 3), round(_fy, 3),
+                                    int(getattr(config, "SLIDE_TEXT_REV", 0)))
+                            if _fzk != _fzoom_key:
+                                _fw, _fh = max(1, int(canvas_w * _fz)), max(1, int(canvas_h * _fz))
+                                _ff = make_fonts(_fw, _fh)
+                                _fzoom_surf = card_mgr.render_single(play.event_idx, _fw, _fh, _ff)
+                                del _ff
+                                _fzoom_key = _fzk
+                            if _fzoom_surf is not None:
+                                canvas.fill(config.VOID)
+                                canvas.blit(_fzoom_surf,
+                                            (int(_fx * (canvas_w - _fzoom_surf.get_width())),
+                                             int(_fy * (canvas_h - _fzoom_surf.get_height()))))
+                        else:
+                            _zw, _zh = max(1, int(canvas_w * _fz)), max(1, int(canvas_h * _fz))
+                            _zs = pygame.transform.smoothscale(canvas, (_zw, _zh))
+                            canvas.fill(config.VOID)
+                            canvas.blit(_zs, (int(_fx * (canvas_w - _zw)), int(_fy * (canvas_h - _zh))))
+                            del _zs
 
                 # Draw sci-fi dialogue subtitle capsule when speaking
                 if speech.is_speaking and speech.current_subtitle:
