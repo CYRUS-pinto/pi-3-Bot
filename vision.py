@@ -577,6 +577,20 @@ class OpticalGestureEngine:
                     max_area = area
                     best_cnt = c
 
+        # Crowd ownership: the tracked hand must belong to the presenter. face_boxes[0] is the
+        # sticky presenter (AI loop reorders it first), so a bystander waving a meter to the side
+        # can never flip slides. Zone is generous (body-width around the presenter); with no face
+        # in frame there is no owner to check, so behavior falls back to today's.
+        if best_cnt is not None and face_boxes and len(face_boxes) > 0:
+            _ox, _oy, _ow, _oh = cv2.boundingRect(best_cnt)
+            _hcx, _hcy = (_ox + _ow * 0.5) / gw, (_oy + _oh * 0.5) / gh
+            _pfx, _pfy, _pfw, _pfh = face_boxes[0]
+            _pcx, _pcy = _pfx + _pfw * 0.5, _pfy + _pfh * 0.5
+            if abs(_hcx - _pcx) > 0.55 or _hcy < _pcy - 0.45 or _hcy > _pcy + 0.65:
+                if getattr(config, "GESTURE_DEBUG_LOGS", True):
+                    config.tlog("GestureHUD", f"BYSTANDER HAND IGNORED (hand=({_hcx:.2f},{_hcy:.2f}) presenter=({_pcx:.2f},{_pcy:.2f}))")
+                best_cnt = None
+
         if body_translating:
             debounce = getattr(config, "GESTURE_WALK_DEBOUNCE_SEC", 0.65)
             self.walk_lockout_until = now + debounce
@@ -1088,6 +1102,8 @@ class UniversalVisionTracker:
         self._cached_faces: list[dict] = []
         self._last_face_time = 0.0
         self._primary_face_idx: int = 0          # Which detected face is the current target (UP/DOWN to cycle)
+        self._presenter_center = (0.5, 0.5)    # ponytail crowds 2026-09-12: sticky presenter anchor (nearest-center match)
+        self._presenter_time = 0.0             # last frame the presenter was seen (1.5s grace before handover)
         self._ai_fps = 0.0
         self.is_low_power = False
         self.last_detection_timestamp = time.time()
@@ -1167,6 +1183,32 @@ class UniversalVisionTracker:
             self._primary_face_idx = (self._primary_face_idx + direction) % n
             return self._cached_faces[self._primary_face_idx]
 
+
+    def _match_presenter(self, faces, now):
+        """Sticky presenter identity for crowds: the face nearest the last presenter anchor
+        (< 0.18 = same human) keeps the mic; otherwise the largest face takes over (someone
+        new stepped closer). ponytail crowds 2026-09-12: without this, the lock teleports
+        between people whenever relative sizes shift — tripping the walk gate and handing
+        gestures to bystanders. No re-ID model (a Pi-3 can't afford one); centroid matching
+        is exactly enough because people don't teleport between 60ms frames."""
+        if not faces:
+            return None
+        pcx, pcy = self._presenter_center
+        if now - self._presenter_time < 1.5:
+            best, best_d = None, 0.18
+            for f in faces:
+                ccx, ccy = f["center"]
+                d = abs(ccx - pcx) + abs(ccy - pcy)
+                if d < best_d:
+                    best, best_d = f, d
+            if best is not None:
+                self._presenter_center = best["center"]
+                self._presenter_time = now
+                return best
+        big = faces[0]  # area-sorted: largest takes over
+        self._presenter_center = big["center"]
+        self._presenter_time = now
+        return big
 
     def start(self):
         """Starts background AI and Stream workers."""
@@ -1370,6 +1412,8 @@ class UniversalVisionTracker:
 
             # Sort detected faces by area (closest face first)
             detected_faces.sort(key=lambda d: d["area"], reverse=True)
+            # Sticky presenter for crowds: who has the mic. Everyone else is audience.
+            presenter = self._match_presenter(detected_faces, now)
 
             # 3. Optical Hand Tracking & Gesture Recognition (re-uses `small` with ZERO resize overhead!)
             t_gest_0 = time.perf_counter()
@@ -1384,7 +1428,12 @@ class UniversalVisionTracker:
                         self.hand_tip = (_lr[0], _lr[1])  # steadier marker than the motion centroid
             if self.gesture_engine is not None and config.GESTURE_SWIPE_ENABLED:
                 try:
-                    f_boxes = [d["box"] for d in detected_faces]
+                    # Presenter FIRST: the engine reads face_boxes[0] as the ruler (distance scale),
+                    # the shield anchor, and the walk-gate reference — all must follow the sticky
+                    # presenter, never whichever face happens to be biggest this frame.
+                    _pb = presenter["box"] if presenter is not None else None
+                    _all = [d["box"] for d in detected_faces]
+                    f_boxes = [_pb] + [b for b in _all if b != _pb] if _pb is not None else _all
                     gesture = self.gesture_engine.process(frame, face_boxes=f_boxes, pre_small=small)
                     self.hand_detected = self.gesture_engine.hand_detected
                     self.hand_box = self.gesture_engine.hand_box
@@ -1453,7 +1502,7 @@ class UniversalVisionTracker:
                 if len(detected_faces) > 0:
                     self.target_active = True
                     self.crowd_count = len(detected_faces)
-                    p = detected_faces[0]
+                    p = presenter if presenter is not None else detected_faces[0]
                     raw_cx, raw_cy = p["center"]
 
                     # Pass through 1€ Filter with explicit timestamp for silky smooth, jitter-free lock
@@ -1462,8 +1511,8 @@ class UniversalVisionTracker:
                     self.estimated_dist = p["dist"]
 
                     self.secondary_targets = [
-                        f["center"] for f in detected_faces[1:5]
-                    ]
+                        f["center"] for f in detected_faces if f is not p
+                    ][:4]
                     self._cached_faces = detected_faces
                     self._last_face_time = now
                 else:
