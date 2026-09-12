@@ -930,21 +930,33 @@ class OpticalGestureEngine:
                     _zone = "RIGHT"
                 else:
                     _zone = ""
-                _still = True
-                if len(self.history) >= 2:
-                    _h0, _h1 = self.history[-2], self.history[-1]
-                    _hdt = max(0.02, _h1[2] - _h0[2])
-                    _hmax = getattr(config, "GESTURE_HOLD_MAX_SPEED", 0.25)
-                    _still = (abs(_h1[3] - _h0[3]) / _hdt) < _hmax and (abs(_h1[4] - _h0[4]) / _hdt) < _hmax
-                if _zone == "" or not _still:
-                    self._hold_zone = _zone
+                # ponytail holds 2026-09-12 fix: stillness is measured over a 0.30s window, not
+                # frame-to-frame (motion-centroid jitter at ~18fps reads as constant motion and the
+                # dwell clock could NEVER accumulate). Three tiers: still -> accumulate; jitter
+                # (0.25-0.6) -> pause the clock without resetting; real motion -> restart.
+                _hmax = getattr(config, "GESTURE_HOLD_MAX_SPEED", 0.25)
+                _w = [p for p in self.history if now - p[2] <= 0.30]
+                _wv = 0.0
+                if len(_w) >= 2:
+                    _wdt = max(0.05, _w[-1][2] - _w[0][2])
+                    _wv = max(abs(_w[-1][3] - _w[0][3]) / _wdt, abs(_w[-1][4] - _w[0][4]) / _wdt)
+                _still = _wv < _hmax
+                if _zone == "":
+                    self._hold_zone = ""
                     self._hold_start = now
-                    if _zone == "":
-                        self._hold_fired_zone = ""  # fully left the zones -> re-arm
+                    self._hold_fired_zone = ""  # fully left the zones -> re-arm
                 elif _zone != self._hold_zone:
                     self._hold_zone = _zone
                     self._hold_start = now
-                elif _zone != self._hold_fired_zone and (now - self._hold_start) >= getattr(config, "GESTURE_HOLD_SEC", 0.8):
+                elif _wv > 0.6:
+                    self._hold_start = now  # genuine motion -> restart the dwell clock
+                if _still and _zone != "" and _zone == self._hold_zone:
+                    if getattr(config, "GESTURE_DEBUG_LOGS", False):
+                        if not hasattr(self, "_hold_last_log_t") or (now - self._hold_last_log_t > 0.4):
+                            self._hold_last_log_t = now
+                            _held = now - self._hold_start
+                            config.tlog("GestureHold", f"dwell {_zone} {_held:.1f}/{getattr(config, 'GESTURE_HOLD_SEC', 0.8):.1f}s (wobble {_wv:.2f})")
+                if _zone != "" and _zone != self._hold_fired_zone and _still and _zone == self._hold_zone and (now - self._hold_start) >= getattr(config, "GESTURE_HOLD_SEC", 0.8):
                     _hc = {"LEFT": "SWIPE_LEFT", "RIGHT": "SWIPE_RIGHT", "TOP": "SWIPE_UP"}[_zone]
                     if self._hold_gates_pass(_hc, now):
                         self._hold_fired_zone = _zone
