@@ -976,9 +976,6 @@ def main():
                 if "gesture_confirm_n" in payload:
                     config.GESTURE_CONFIRM_N = max(1, min(3, int(payload["gesture_confirm_n"])))
                     banner_items.append(f"CONFIRM: {config.GESTURE_CONFIRM_N}x")
-                if "gesture_debug" in payload:
-                    config.GESTURE_DEBUG_LOGS = bool(payload["gesture_debug"])
-                    banner_items.append(f"GESTURE LOGS: {'ON' if config.GESTURE_DEBUG_LOGS else 'OFF'}")
                 for _fk, _fattr in (("foam_l", "FOAM_L"), ("foam_t", "FOAM_T"),
                                     ("foam_r", "FOAM_R"), ("foam_b", "FOAM_B")):
                     if _fk in payload:

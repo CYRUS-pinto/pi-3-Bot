@@ -371,7 +371,6 @@ class OpticalGestureEngine:
         self.locked_rebound_gesture = ""
         self.rebound_lockout_until = 0.0
         self.last_swipe_fired_t = 0.0      # Timestamp when last swipe was fired (history before this is stale)
-        self._last_fired_gesture = ""      # ponytail 2026-09-12: flick-event model — same-direction repeats use SAME_DIR window, not settle-wait
         self._confirm_cand = ""            # Confirm-N streak state (GESTURE_CONFIRM_N)
         self._confirm_n = 0
         self.hand_must_settle = False
@@ -570,14 +569,13 @@ class OpticalGestureEngine:
             self.last_latency_ms = (time.perf_counter() - t_start) * 1000.0
             return None
 
-        cooldown = getattr(config, "GESTURE_REFRACTORY_SEC", 0.35)
+        cooldown = getattr(config, "GESTURE_COOLDOWN_SEC", 1.00)
         sens = getattr(config, "GESTURE_SWIPE_SENSITIVITY", self.sensitivity)
         min_sweep_dist = getattr(config, "GESTURE_SWIPE_DISTANCE", 0.18) / max(0.5, sens)
         drop_reset_y = getattr(config, "GESTURE_DROP_RESET_Y", 0.72)
 
-        # Refractory window (was: 1.00s unified cooldown that wiped ALL motion — the "delayed/queued"
-        # feel: a 2nd flick's wind-up was erased before it could fire). 0.35s only covers the same
-        # stroke echoing across frames; wind-up for the next flick survives from here on.
+        # Strict Cooldown Lockout across ALL directions:
+        # While in cooldown, continuously wipe history so swipes during cooldown CANNOT queue or trigger later!
         if now - self.last_swipe_time <= cooldown:
             self.history.clear()
             self.hand_must_settle = False
@@ -605,10 +603,8 @@ class OpticalGestureEngine:
         def evaluate_virtual_screen_sweep(history, current_time) -> str | None:
             if len(history) < 3 or (current_time - self.last_swipe_time <= cooldown):
                 return None
-            # ponytail 2026-09-12: settle-wait REMOVED as post-fire gate — it forced a full stop
-            # between flicks (2nd flick's wind-up kept the hand "moving" so recognition never resumed).
-            # Return-stroke duty now belongs to the rebound window + fired-history anchor below.
-            # The flag survives only as a fail-safe (nothing sets it post-fire anymore).
+            # Hand must fully decelerate to a near-stop after any swipe before a new
+            # gesture is recognised — this is the primary return-stroke leak guard.
             if self.hand_must_settle:
                 return None
 
@@ -725,13 +721,6 @@ class OpticalGestureEngine:
                     candidate = "SWIPE_UP" if delta_val < 0 else "SWIPE_DOWN"
 
             if candidate is not None:
-                # Same-direction echo gate: a fresh flick needs SAME_DIR gap; anything sooner is the
-                # previous stroke still unwinding across frames (history.clear on fire usually eats it,
-                # this covers the tail). Real-world paging rhythm is ~0.5-0.8s, so 0.45 never blocks intent.
-                _gap = current_time - self.last_swipe_time
-                if self._last_fired_gesture and candidate == self._last_fired_gesture and \
-                        _gap < getattr(config, "GESTURE_SAME_DIR_SEC", 0.45):
-                    return None
                 # Discard opposite return stroke during lockout window
                 if current_time < self.rebound_lockout_until and candidate == self.locked_rebound_gesture:
                     if getattr(config, "GESTURE_DEBUG_LOGS", True):
@@ -767,13 +756,12 @@ class OpticalGestureEngine:
 
                 self.last_swipe_time = current_time
                 self.last_swipe_fired_t = current_time  # anchor: history before this point is stale
-                self._last_fired_gesture = candidate   # same-direction echo gate above
-                self.hand_must_settle = False          # ponytail 2026-09-12: no settle-wait — next flick's wind-up must survive
+                self.hand_must_settle = True             # block new gestures until hand decelerates to rest
                 self.latest_gesture = candidate
                 self.gesture_display_until = current_time + 1.6
                 self.history.clear()
                 if getattr(config, "GESTURE_DEBUG_LOGS", True):
-                    config.tlog("GestureHUD", f"GESTURE FIRED -> {candidate} (rebound {rebound_time:.1f}s, same-dir {getattr(config, 'GESTURE_SAME_DIR_SEC', 0.45):.2f}s)")
+                    config.tlog("GestureHUD", f"GESTURE FIRED -> {candidate} (rebound filter armed for {rebound_time:.1f}s, waiting for hand settle)")
                 return candidate
 
             return None
