@@ -825,6 +825,26 @@ class OpticalGestureEngine:
         return result_gesture
 
 
+def _open_capture(src, timeout_s=8.0):
+    """Open cv2.VideoCapture with a hard time bound. Proven 2026-09-12: a direct open on the
+    ADB-forwarded phone MJPEG stalled 31s inside ffmpeg and wedged the caller (dead HEARTBEAT).
+    ponytail: thread+join bounds it to 8s; the stray thread leaks at most one phone socket."""
+    box = {}
+
+    def _do():
+        try:
+            box["cap"] = cv2.VideoCapture(src)
+        except Exception:
+            box["cap"] = None
+
+    t = threading.Thread(target=_do, daemon=True)
+    t.start()
+    t.join(timeout_s)
+    if t.is_alive() or box.get("cap") is None:
+        return cv2.VideoCapture()  # unopened sentinel — caller treats as fail-fast
+    return box["cap"]
+
+
 class FreshFrameGrabber:
     """Zero-latency non-blocking frame grabber that continuously drains the queue and auto-reconnects on stream drops.
     Auto-negotiates optimal lightweight stream resolution and drains socket buffer in <0.2ms."""
@@ -851,7 +871,7 @@ class FreshFrameGrabber:
             except Exception:
                 pass
 
-        self.cap = cv2.VideoCapture(src)
+        self.cap = _open_capture(src)
         try:
             self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         except Exception:
@@ -927,7 +947,7 @@ class FreshFrameGrabber:
                                 pass
                         except Exception:
                             pass
-                    self.cap = cv2.VideoCapture(self.src)
+                    self.cap = _open_capture(self.src)
                     try:
                         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                     except Exception:
