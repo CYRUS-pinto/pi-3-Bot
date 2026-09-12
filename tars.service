@@ -14,6 +14,9 @@ WorkingDirectory=/home/cyrus/TARS
 Environment=SDL_VIDEODRIVER=kmsdrm
 Environment=SDL_AUDIODRIVER=dummy
 Environment=PYTHONUNBUFFERED=1
+# ponytail: network-before-app — tether script assigns the phone IP (static fallback
+# when the phone's DHCP stays silent) so the camera is reachable before frame one.
+ExecStartPre=/home/cyrus/TARS/tars-tether.sh usb0
 ExecStart=/usr/bin/python3 /home/cyrus/TARS/main.py
 Restart=always
 RestartSec=5
