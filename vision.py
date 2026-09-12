@@ -154,6 +154,7 @@ def discover_camera_sources() -> list[str | int]:
 
     # 3. Known phone endpoints (USB tethered Xiaomi/Redmi, WiFi phones, DroidCam)
     candidates.extend([
+        "http://127.0.0.1:8090/video",       # ADB-forwarded IP Webcam (no tether/IP needed; see tars-tether.sh)
         "http://10.57.90.53:8080/video",     # USB Tethered Phone 1 (Xiaomi/Redmi)
         "http://10.70.4.51:8080/video",      # WiFi Connected Phone 2
         "http://192.168.42.129:8080/video",  # Standard Android USB tether subnet

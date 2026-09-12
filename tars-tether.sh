@@ -15,6 +15,12 @@ elif command -v dhclient >/dev/null 2>&1; then
     dhclient -r "$IFACE" 2>/dev/null
     dhclient "$IFACE" 2>/dev/null
 fi
+# ADB forward for IP Webcam over plain USB (no tethering/IP needed on the phone at all —
+# just USB debugging + the app running). Survives nothing by itself; udev re-runs this
+# script on every reconnect, and the vision loop rediscovers the 8090 endpoint alone.
+if command -v adb >/dev/null 2>&1; then
+    adb forward tcp:8090 tcp:8080 2>/dev/null
+fi
 # fallback: link-local so the phone is at least reachable for diagnostics
 ip addr show "$IFACE" 2>/dev/null | grep -q "inet " || ip addr add 192.168.42.137/24 dev "$IFACE" 2>/dev/null
 logger -t tars-tether "tether iface $IFACE ready: $(ip -o -4 addr show "$IFACE" 2>/dev/null | awk '{print $4}')"
