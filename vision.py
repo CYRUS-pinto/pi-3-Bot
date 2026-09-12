@@ -922,14 +922,26 @@ class OpticalGestureEngine:
             # body type cannot fool it. Naturally exclusive with swipes (a swipe crosses a zone far
             # too fast to dwell). No key-repeat: the zone must be left before it can fire again.
             if getattr(config, "GESTURE_HOLD_ENABLED", True):
-                if cy < 0.38 and 0.30 < cx < 0.70:
-                    _zone = "TOP"
+                # ponytail holds 2026-09-12 accuracy: zone HYSTERESIS. A hand hovering exactly on a
+                # boundary (cx≈0.42) flickered LEFT/""/LEFT every frame and the dwell clock reset
+                # forever. Enter bounds are strict; once inside, the hand keeps the zone until it
+                # clearly leaves (wider exit bounds). TOP widened: close-up raised hands enter easier.
+                if cy < 0.40 and 0.28 < cx < 0.72:
+                    _raw = "TOP"
                 elif cx < 0.42:
-                    _zone = "LEFT"
+                    _raw = "LEFT"
                 elif cx > 0.58:
-                    _zone = "RIGHT"
+                    _raw = "RIGHT"
                 else:
-                    _zone = ""
+                    _raw = ""
+                _zone = _raw
+                _hz = self._hold_zone
+                if _hz == "LEFT" and cx < 0.48 and _raw != "TOP":
+                    _zone = "LEFT"
+                elif _hz == "RIGHT" and cx > 0.52 and _raw != "TOP":
+                    _zone = "RIGHT"
+                elif _hz == "TOP" and cy < 0.44 and 0.24 < cx < 0.76:
+                    _zone = "TOP"
                 # ponytail holds 2026-09-12 fix: stillness is measured over a 0.30s window, not
                 # frame-to-frame (motion-centroid jitter at ~18fps reads as constant motion and the
                 # dwell clock could NEVER accumulate). Three tiers: still -> accumulate; jitter
