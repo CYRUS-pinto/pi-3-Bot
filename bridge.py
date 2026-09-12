@@ -2677,7 +2677,7 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
       if (st.calibration) {
         if (st.calibration.show_pip !== undefined) updatePipButton(st.calibration.show_pip);
         if (st.calibration.hud_enabled !== undefined) updateDiagButton(st.calibration.hud_enabled);
-        if (st.calibration.gesture_swipe_enabled !== undefined) updateGestureButton(st.calibration.gesture_swipe_enabled);
+        if (st.calibration.gesture_swipe_enabled !== undefined) updateGestureButton(!!(st.calibration.gesture_swipe_enabled || st.calibration.gesture_hold_enabled || st.calibration.gesture_twohand_enabled));
         syncKindButtons(st.calibration);
         const hb = document.getElementById('handBadge');
         if (hb) {

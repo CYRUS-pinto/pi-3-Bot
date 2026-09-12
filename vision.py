@@ -390,8 +390,12 @@ class OpticalGestureEngine:
         self.body_motion_history: list[tuple[float, float]] = []  # (body_cx, timestamp)
         self.walk_lockout_until = 0.0
         self.walk_veto_until = 0.0       # ponytail crowds: fire veto while presenter travels (tracking continues)
-        self._hold_zone = ""             # ponytail holds: current dwell zone LEFT/RIGHT/TOP/""
-        self._hold_start = 0.0           # when the current dwell began
+        self._hold_zone = ""             # ponytail holds: adopted dwell zone LEFT/RIGHT/TOP/""
+        self._hold_still_acc = 0.0       # accumulated STILL seconds in the adopted zone (the dwell clock)
+        self._hold_entry = None          # (cx, cy) where the dwell began (drift-through must not count)
+        self._hold_zone_cand = ""        # incoming zone awaiting 0.25s persistence (kills hand-flip flicker)
+        self._hold_zone_cand_t = 0.0
+        self._hold_last_frame_t = 0.0
         self._hold_fired_zone = ""       # zone already fired (must leave before refire — no key-repeat)
         self._twohand_start = 0.0        # when the two-hand pose first appeared
         self._twohand_last_seen = 0.0    # last frame both hands visible (0.25s grace against contour flicker)
@@ -418,6 +422,17 @@ class OpticalGestureEngine:
         self.latest_gesture = candidate
         self.gesture_display_until = current_time + 1.6
         self.history.clear()
+        # ponytail 2026-09-12 audit: cross-kind hygiene. A fire ends ALL pending dwells — a swipe
+        # landing parked inside a zone must not auto-fire a hold 0.8s later, and stale confirm
+        # streaks must not fast-track the next sweep. No-repeat memory (_hold_fired_zone,
+        # _twohand_fired) is KEPT: leaving the pose is still required to re-arm.
+        self._hold_zone = ""
+        self._hold_still_acc = 0.0
+        self._hold_entry = None
+        self._hold_zone_cand = ""
+        self._twohand_start = 0.0
+        self._confirm_cand = ""
+        self._confirm_n = 0
         if getattr(config, "GESTURE_DEBUG_LOGS", True):
             config.tlog("GestureHUD", f"GESTURE FIRED -> {candidate} via {via} (rebound {rebound_time:.1f}s, same-dir {getattr(config, 'GESTURE_SAME_DIR_SEC', 0.45):.2f}s)")
         return candidate
@@ -497,7 +512,9 @@ class OpticalGestureEngine:
             # (people always drifting past) detection looked dead. Now the hand box keeps following
             # and the veto only blocks firing; the instant travel stops, the next flick goes through
             # with its wind-up intact. No-face body motion keeps the hard lockout below.
-            self.walk_veto_until = now + getattr(config, "GESTURE_WALK_DEBOUNCE_SEC", 0.65)
+            # ponytail 2026-09-12 audit: 0.35s tail, not the 1.20s debounce — the old tail made every
+            # stop-then-flick eat a full second of dead air. Re-armed each traveling frame anyway.
+            self.walk_veto_until = now + 0.35
 
         # Zero-Copy / Re-use pre_small from YuNet if provided, else fast nearest-neighbor resize
         if pre_small is not None:
@@ -737,6 +754,11 @@ class OpticalGestureEngine:
 
             curr_tip_x, curr_tip_y, curr_t, curr_cx, curr_cy = history[-1]
 
+            # ponytail 2026-09-12 audit: distances normalize FULLY by apparent size (geometry), but
+            # required SPEEDS cap at 1.3x — otherwise a kid with the camera in their face needs an
+            # inhuman 0.88 widths/sec flick. Close-up ghosts are still covered (distances stay strict).
+            _spd_scale = min(dist_scale, 1.3)
+
             best_sweep = None
             max_disp = 0.0
 
@@ -767,7 +789,7 @@ class OpticalGestureEngine:
                 # ponytail: flick-forward tuning (2026-09-12, live complaint: casual motion fired swipes).
                 # Slow drifts now fall through to the flick shortcut below (needs real speed); deliberate
                 # full sweeps still pass comfortably (they run 1.0+). Threshold, not structure.
-                if abs(dx) >= h_min_dist and abs(dx) > (1.20 * abs(dy)) and speed_x > 0.30 * dist_scale:
+                if abs(dx) >= h_min_dist and abs(dx) > (1.20 * abs(dy)) and speed_x > 0.30 * _spd_scale:
                     # Parallax check against head translation:
                     # If head is also traveling in the same direction at walking speed and relative displacement is small,
                     # this is whole-body translation (walking), not an isolated hand swipe!
@@ -792,7 +814,7 @@ class OpticalGestureEngine:
                 # Only when no HORIZ candidate yet (never overrides a proper sweep).
                 if best_sweep is None:
                     _fmin = getattr(config, "GESTURE_FLICK_DISTANCE", 0.10) / eff_sens_h * dist_scale
-                    _fspd = getattr(config, "GESTURE_FLICK_SPEED", 0.55) * dist_scale
+                    _fspd = getattr(config, "GESTURE_FLICK_SPEED", 0.55) * _spd_scale
                     if abs(dx) >= _fmin and abs(dx) > (1.50 * abs(dy)) and speed_x > _fspd:
                         if abs(dx) > max_disp:
                             max_disp = abs(dx)
@@ -807,20 +829,20 @@ class OpticalGestureEngine:
                     v_min = getattr(config, "GESTURE_VERTICAL_DISTANCE", 0.12) / eff_sens_v * dist_scale
                     # SWIPE UP: hand moves upward — clean vertical dominance
                     if dy < 0 and orig_cy >= 0.18 and curr_cy <= 0.70:
-                        if abs(dy) >= v_min and abs(dy) > (1.20 * abs(dx)) and speed_y > 0.20 * dist_scale:
+                        if abs(dy) >= v_min and abs(dy) > (1.20 * abs(dx)) and speed_y > 0.20 * _spd_scale:
                             if abs(dy) > max_disp:
                                 max_disp = abs(dy)
                                 best_sweep = ("VERT", dy)
                     # SWIPE DOWN: hand moves downward — clean vertical dominance
                     elif dy > 0 and orig_cy <= 0.70 and curr_cy >= 0.20:
-                        if abs(dy) >= v_min and abs(dy) > (1.20 * abs(dx)) and speed_y > 0.20 * dist_scale:
+                        if abs(dy) >= v_min and abs(dy) > (1.20 * abs(dx)) and speed_y > 0.20 * _spd_scale:
                             if abs(dy) > max_disp:
                                 max_disp = abs(dy)
                                 best_sweep = ("VERT", dy)
                     # Vertical flick: same kid-style shortcut as horizontal (short + fast).
                     if best_sweep is None and getattr(config, "GESTURE_MODE", "4_WAY") != "HORIZONTAL_SWIPE":
                         _vfmin = getattr(config, "GESTURE_FLICK_VDISTANCE", 0.08) / eff_sens_v * dist_scale
-                        _vfspd = getattr(config, "GESTURE_FLICK_SPEED", 0.55) * dist_scale
+                        _vfspd = getattr(config, "GESTURE_FLICK_SPEED", 0.55) * _spd_scale
                         if abs(dy) >= _vfmin and abs(dy) > (1.50 * abs(dx)) and speed_y > _vfspd:
                             if abs(dy) > max_disp:
                                 max_disp = abs(dy)
@@ -884,6 +906,9 @@ class OpticalGestureEngine:
             self.hand_box = None
             self.hand_must_settle = False
             self._hold_zone = ""           # hand gone -> hold state resets (re-entry can fire fresh)
+            self._hold_still_acc = 0.0
+            self._hold_entry = None
+            self._hold_zone_cand = ""
             self._hold_fired_zone = ""
             # Check if swipe finished right before hand came to rest
             if len(self.history) >= 3:
@@ -906,6 +931,16 @@ class OpticalGestureEngine:
             self.hand_box = (bx / gw, by / gh, bw / gw, bh / gh)
             self.hand_tip = (cx, cy)
 
+            if self.history:
+                # ponytail 2026-09-12 audit: TELEPORT CUT. best-contour flips between two hands/people
+                # in one frame (>0.30 jump; a real flick moves <0.12/frame at 18fps). Evaluating across
+                # the jump forged displacement+speed out of nothing — the ghost-swipe factory. A cut
+                # track restarts clean; genuine motion never jumps this far.
+                _px, _py = self.history[-1][3], self.history[-1][4]
+                if abs(cx - _px) > 0.30 or abs(cy - _py) > 0.30:
+                    if getattr(config, "GESTURE_DEBUG_LOGS", True):
+                        config.tlog("GestureHUD", f"TRACK TELEPORT CUT ({_px:.2f},{_py:.2f})->({cx:.2f},{cy:.2f}) — new track")
+                    self.history.clear()
             self.history.append((cx, cy, now, cx, cy))
             self.history = [pt for pt in self.history if now - pt[2] <= 0.55]
 
@@ -948,10 +983,13 @@ class OpticalGestureEngine:
                     _zone = "RIGHT"
                 elif _hz == "TOP" and cy < 0.44 and 0.24 < cx < 0.76:
                     _zone = "TOP"
-                # ponytail holds 2026-09-12 fix: stillness is measured over a 0.30s window, not
-                # frame-to-frame (motion-centroid jitter at ~18fps reads as constant motion and the
-                # dwell clock could NEVER accumulate). Three tiers: still -> accumulate; jitter
-                # (0.25-0.6) -> pause the clock without resetting; real motion -> restart.
+                # ponytail holds 2026-09-12 audit: the dwell clock is ACCUMULATED still-time, not
+                # wall-time-since-entry (wobble seconds used to count as dwelling). Stillness is judged
+                # over a 0.30s window (frame jitter at ~18fps must not read as motion). Three tiers:
+                # still -> bank time; wobble 0.25-0.6 -> pause (bank kept); real motion -> bankrupt.
+                # Plus: zone ADOPTION needs 0.25s persistence (best-contour flips between a holder's
+                # two hands must not thrash the clock), and an ENTRY ANCHOR (drifting through a zone
+                # at 0.2/s is transit, not intent — displacement from entry capped at 0.12).
                 _hmax = getattr(config, "GESTURE_HOLD_MAX_SPEED", 0.25)
                 _w = [p for p in self.history if now - p[2] <= 0.30]
                 _wv = 0.0
@@ -959,22 +997,43 @@ class OpticalGestureEngine:
                     _wdt = max(0.05, _w[-1][2] - _w[0][2])
                     _wv = max(abs(_w[-1][3] - _w[0][3]) / _wdt, abs(_w[-1][4] - _w[0][4]) / _wdt)
                 _still = _wv < _hmax
+                _dtf = min(0.2, max(0.0, now - self._hold_last_frame_t)) if self._hold_last_frame_t else 0.0
+                self._hold_last_frame_t = now
                 if _zone == "":
                     self._hold_zone = ""
-                    self._hold_start = now
+                    self._hold_still_acc = 0.0
+                    self._hold_entry = None
+                    self._hold_zone_cand = ""
                     self._hold_fired_zone = ""  # fully left the zones -> re-arm
-                elif _zone != self._hold_zone:
-                    self._hold_zone = _zone
-                    self._hold_start = now
-                elif _wv > 0.6:
-                    self._hold_start = now  # genuine motion -> restart the dwell clock
-                if _still and _zone != "" and _zone == self._hold_zone:
+                else:
+                    if _zone != self._hold_zone:
+                        if _zone != self._hold_zone_cand:
+                            self._hold_zone_cand = _zone
+                            self._hold_zone_cand_t = now
+                        elif now - self._hold_zone_cand_t >= 0.25:
+                            self._hold_zone = _zone
+                            self._hold_still_acc = 0.0
+                            self._hold_entry = (cx, cy)
+                            self._hold_zone_cand = ""
+                    if _zone == self._hold_zone and self._hold_zone != "":
+                        if _still:
+                            if self._hold_entry is None:
+                                self._hold_entry = (cx, cy)
+                            if math.hypot(cx - self._hold_entry[0], cy - self._hold_entry[1]) <= 0.12:
+                                self._hold_still_acc += _dtf
+                            else:
+                                self._hold_entry = (cx, cy)  # drifted: re-anchor, bank nothing
+                                self._hold_still_acc = 0.0
+                        elif _wv > 0.6:
+                            self._hold_still_acc = 0.0  # genuine motion -> bankrupt
+                            self._hold_entry = (cx, cy)
+                        # wobble tier: pause — bank and anchor untouched
+                if _still and self._hold_zone != "" and _zone == self._hold_zone:
                     if getattr(config, "GESTURE_DEBUG_LOGS", False):
                         if not hasattr(self, "_hold_last_log_t") or (now - self._hold_last_log_t > 0.4):
                             self._hold_last_log_t = now
-                            _held = now - self._hold_start
-                            config.tlog("GestureHold", f"dwell {_zone} {_held:.1f}/{getattr(config, 'GESTURE_HOLD_SEC', 0.8):.1f}s (wobble {_wv:.2f})")
-                if _zone != "" and _zone != self._hold_fired_zone and _still and _zone == self._hold_zone and (now - self._hold_start) >= getattr(config, "GESTURE_HOLD_SEC", 0.8):
+                            config.tlog("GestureHold", f"dwell {_zone} {self._hold_still_acc:.1f}/{getattr(config, 'GESTURE_HOLD_SEC', 0.8):.1f}s (wobble {_wv:.2f})")
+                if self._hold_zone != "" and _zone == self._hold_zone and _zone != self._hold_fired_zone and _still and self._hold_still_acc >= getattr(config, "GESTURE_HOLD_SEC", 0.8):
                     _hc = {"LEFT": "SWIPE_LEFT", "RIGHT": "SWIPE_RIGHT", "TOP": "SWIPE_UP"}[_zone]
                     if self._hold_gates_pass(_hc, now):
                         self._hold_fired_zone = _zone
