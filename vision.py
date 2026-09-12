@@ -403,6 +403,13 @@ class OpticalGestureEngine:
         t_start = time.perf_counter()
         now = time.time()
 
+        # ponytail accuracy 2026-09-12: distance ruler FIRST (walk gate + hand gates share it).
+        # Face height is the ruler (nh~0.087 = 2.2m sofa reference). No face -> neutral 1.0.
+        _face_h = face_boxes[0][3] if face_boxes and len(face_boxes) > 0 else 0.087
+        dist_scale = min(1.6, max(0.6, _face_h / 0.087))
+        area_scale = dist_scale * dist_scale
+        self._dist_scale = dist_scale
+
         # 1. Presenter Walking & Pacing Rejection Tracker (Low-pass filtered against detector jitter)
         if face_boxes and len(face_boxes) > 0:
             fx, fy, fbw, fbh = face_boxes[0]
@@ -418,15 +425,18 @@ class OpticalGestureEngine:
                 self.face_history.append((self.smooth_face_x, self.smooth_face_y, now))
                 self.face_history = [p for p in self.face_history if now - p[2] <= 0.55]
 
-            # Sustained unidirectional face translation:
-            # If face moved horizontally by >= 0.035 with speed > GESTURE_WALK_LOCKOUT_SPEED (0.09):
+            # Sustained unidirectional face TRAVEL (not jitter):
+            # ponytail accuracy 2026-09-12: was dx>0.035 + speed>0.12 — at event close-ups (0.6m)
+            # that is ~2cm of breathing sway, re-armed every frame = gestures locked out FOREVER.
+            # Now: net travel must exceed ~a head-width (0.10, distance-scaled) with real pace.
+            # Sway oscillates around an anchor (net ~0); only genuine room-crossing trips it.
             if len(self.face_history) >= 3 and (now - self.face_history[0][2] >= 0.18):
                 dt_walk = now - self.face_history[0][2]
                 walk_dx = abs(self.smooth_face_x - self.face_history[0][0])
                 walk_speed = walk_dx / max(0.03, dt_walk)
-                walk_limit = getattr(config, "GESTURE_WALK_LOCKOUT_SPEED", 0.09)
+                walk_limit = max(float(getattr(config, "GESTURE_WALK_LOCKOUT_SPEED", 0.12)), 0.15 * dist_scale)
                 debounce = getattr(config, "GESTURE_WALK_DEBOUNCE_SEC", 0.65)
-                if walk_speed > walk_limit and walk_dx > 0.035:
+                if walk_speed > walk_limit and walk_dx > 0.10 * dist_scale:
                     self.walk_lockout_until = now + debounce
                     if getattr(config, "GESTURE_DEBUG_LOGS", True):
                         config.tlog("GestureHUD", f"WALKING DETECTED (face_dx={walk_dx:.2f}, speed={walk_speed:.2f}) -> Gestures locked out")
@@ -516,10 +526,6 @@ class OpticalGestureEngine:
         # Face height is the ruler (nh~0.087 = 2.2m sofa reference). Far people make small apparent
         # motions (fixed gates = misses); close people make huge ones (fixed gates = ghosts).
         # Linear scale for distances/speeds, squared for areas. No face -> neutral 1.0.
-        _face_h = face_boxes[0][3] if face_boxes and len(face_boxes) > 0 else 0.087
-        dist_scale = min(1.6, max(0.6, _face_h / 0.087))
-        area_scale = dist_scale * dist_scale
-        self._dist_scale = dist_scale  # sweep evaluator (closure below) normalizes by this
         if cv2.countNonZero(motion_mask) < (gw * gh) * 0.005 * _hsz * area_scale:
             contours = []
         else:
