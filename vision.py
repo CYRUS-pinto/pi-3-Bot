@@ -1694,7 +1694,7 @@ class UniversalVisionTracker:
             if getattr(self, "is_presenter_walking", False):
                 cv2.rectangle(annotated, (asw // 2 - 140, 28), (asw // 2 + 140, 48), (10, 14, 20), -1)
                 cv2.rectangle(annotated, (asw // 2 - 140, 28), (asw // 2 + 140, 48), (40, 140, 255), 1)
-                cv2.putText(annotated, "[ PACING DETECTED // SWIPE LOCKED ]", (asw // 2 - 130, 42),
+                cv2.putText(annotated, "[ PACING // SWIPE PAUSED - HAND TRACKED ]", (asw // 2 - 130, 42),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.36, (40, 140, 255), 1, cv2.LINE_AA)
 
             # 2. Draw Virtual Screen Holographic Boundaries when hand is active
