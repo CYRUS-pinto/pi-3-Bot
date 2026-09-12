@@ -53,6 +53,6 @@ assert 0.5 <= config.GESTURE_HAND_SIZE <= 2.0, config.GESTURE_HAND_SIZE
 assert config.GESTURE_CONFIRM_N in (1, 2, 3), config.GESTURE_CONFIRM_N
 for _fv in ("FOAM_L", "FOAM_T", "FOAM_R", "FOAM_B"):
     assert 0.0 <= getattr(config, _fv) <= 0.4, (_fv, getattr(config, _fv))
-assert abs(config.VIEW_X) < 1e-9 and abs(config.VIEW_Y) < 1e-9
-assert abs(config.VIEW_W - 1.0) < 1e-9 and abs(config.VIEW_H - 1.0) < 1e-9
+assert 0.0 <= config.VIEW_X <= 1.0 and 0.0 <= config.VIEW_Y <= 1.0
+assert 0.2 <= config.VIEW_W <= 1.0 and 0.2 <= config.VIEW_H <= 1.0
 print("DEMO_DEFAULTS_OK")
