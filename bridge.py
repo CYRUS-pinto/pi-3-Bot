@@ -1689,30 +1689,16 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     layoutPost({foam_l: fl / 100, foam_t: ft / 100, foam_r: fr / 100, foam_b: fb / 100});
   }
   function fitVisible() {
+    // ponytail: math moved server-side (fit_visible cmd) after the phone-side version
+    // mixed units and silently fit nothing. Button = one dumb post; Pi does it right.
     if (navigator.vibrate) navigator.vibrate(40);
-    const fl = +document.getElementById('rngFoamL').value / 100;
-    const ft = +document.getElementById('rngFoamT').value / 100;
-    const fr = +document.getElementById('rngFoamR').value / 100;
-    const fb = +document.getElementById('rngFoamB').value / 100;
-    const vw = Math.max(0.1, 1 - fl - fr), vh = Math.max(0.1, 1 - ft - fb);
-    // fullscreen slides: biggest uniform zoom fitting the visible rect, anchored in it
-    const zm = Math.min(2, Math.max(0.3, Math.min(vw, vh)));
-    const sx = Math.min(2, Math.max(-1, fl + (vw - zm) / 2));
-    const sy = Math.min(2, Math.max(-1, ft + (vh - zm) / 2));
-    // portrait column: height fills visible, centered in it
-    const vh2 = Math.min(1.5, Math.max(0.2, vh));
-    const vw2 = vh2 * 0.316;
-    const vx = Math.min(2, Math.max(-1, fl + (vw - vw2) / 2));
-    const vy = Math.min(2, Math.max(-1, ft + (vh - vh2) / 2));
-    document.getElementById('rngZoom').value = Math.round(zm * 100);
-    document.getElementById('rngSlideX').value = Math.round(sx * 100);
-    document.getElementById('rngSlideY').value = Math.round(sy * 100);
-    document.getElementById('lblZoom').textContent = Math.round(zm * 100) + '%';
-    document.getElementById('lblSlideX').textContent = Math.round(sx * 100) + '%';
-    document.getElementById('lblSlideY').textContent = Math.round(sy * 100) + '%';
-    layoutPost({slide_zoom: +zm.toFixed(2), slide_x: +sx.toFixed(3), slide_y: +sy.toFixed(3),
-      vslide_scale: +vh2.toFixed(2), vslide_x: +vx.toFixed(3), vslide_y: +vy.toFixed(3)},
-      '⛶ FIT VISIBLE APPLIED');
+    fetch('/api/display_control', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({cmd: 'fit_visible'})
+    }).then(() => {
+      showToast('⛶ FIT VISIBLE APPLIED', true);
+    }).catch(() => { showToast('❌ FIT FAILED', false); });
   }
   let confirmN = 1;
   function stepConfirm(d) {

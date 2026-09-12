@@ -703,6 +703,32 @@ def main():
                 config.EVENT_DISPLAY_TIME = max(1.0, min(120.0, val))
                 config.save_calibration()
                 config.tlog("SlideControl", f"Slide Duration -> {config.EVENT_DISPLAY_TIME:.1f}s")
+            elif cmd == "fit_visible":
+                # ponytail: FIT math lives SERVER-side (an earlier phone-side version mixed
+                # screen fractions with leftover anchors and silently fit nothing — proven by
+                # foam_l arriving while zoom stayed 1.0). Anchors are fractions of LEFTOVER space.
+                _fl = min(0.4, max(0.0, float(getattr(config, "FOAM_L", 0.0))))
+                _ft = min(0.4, max(0.0, float(getattr(config, "FOAM_T", 0.0))))
+                _fr = min(0.4, max(0.0, float(getattr(config, "FOAM_R", 0.0))))
+                _fb = min(0.4, max(0.0, float(getattr(config, "FOAM_B", 0.0))))
+                _vw, _vh = max(0.1, 1 - _fl - _fr), max(0.1, 1 - _ft - _fb)
+                _zm = min(2.0, max(0.3, min(_vw, _vh)))
+                _rem = 1 - _zm
+                config.SLIDE_ZOOM = _zm
+                config.SLIDE_X = min(2.0, max(-1.0, (_fl + (_vw - _zm) / 2) / _rem if _rem > 0.01 else 0.5))
+                config.SLIDE_Y = min(2.0, max(-1.0, (_ft + (_vh - _zm) / 2) / _rem if _rem > 0.01 else 0.5))
+                _vh2 = min(1.5, max(0.2, _vh))
+                _cw2 = _vh2 * 9 / 16 / max(0.01, (canvas_w / max(1, canvas_h)))
+                _remx = 1 - _cw2
+                _remy = 1 - _vh2
+                config.VSLIDE_SCALE = _vh2
+                config.VSLIDE_X = min(2.0, max(-1.0, (_fl + (_vw - _cw2) / 2) / _remx if _remx > 0.01 else 0.5))
+                config.VSLIDE_Y = min(2.0, max(-1.0, (_ft + (_vh - _vh2) / 2) / _remy if _remy > 0.01 else 0.5))
+                config.save_calibration()
+                renderer.face._invalidate()
+                last_gesture_banner = f"[FIT VISIBLE: zoom {_zm:.2f}]"
+                last_gesture_banner_until = total_t + 1.6
+                config.tlog("SlideControl", f"Fit visible -> zoom {_zm:.2f} (foam L{_fl:.2f} T{_ft:.2f} R{_fr:.2f} B{_fb:.2f})")
             elif cmd in ("gesture_mode", "set_gesture_mode"):
                 mode = str(payload.get("mode", "")).upper()
                 if mode in ("HORIZONTAL_SWIPE", "HORIZONTAL", "SLIDES_ONLY"):
