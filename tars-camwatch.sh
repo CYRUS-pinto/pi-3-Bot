@@ -38,6 +38,11 @@ stream_alive() {
 }
 
 start_app_server() {
+    # ponytail 2026-09-12: unattended boot — phone may be asleep/locked after its own reboot.
+    # Wake it (needs: no PIN lock, just swipe/none) so the START tap can land.
+    $ADB shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1
+    $ADB shell wm dismiss-keyguard >/dev/null 2>&1
+    sleep 1
     $ADB shell am start -n "$APP_ACTIVITY" >/dev/null 2>&1
     sleep 3
     for _ in 1 2 3; do
