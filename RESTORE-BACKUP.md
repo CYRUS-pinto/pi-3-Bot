@@ -9,7 +9,9 @@ versioned in git and on GitHub, so there are 3 independent copies.
 |------|----------|
 | `TARS-backup-NEW-flickevent-20260912.zip` | Flick-event speed model (fast repeats) |
 | `TARS-backup-OLD-version-20260912.zip` | Pre-flick-event version (stable timing) |
-| `TARS-backup-HOLDBASE-20260912.zip` | Current: crowds + accuracy + walk-veto base |
+| `TARS-backup-HOLDBASE-20260912.zip` | Crowds + accuracy + walk-veto base |
+| `TARS-backup-PREHYSTERESIS-20260912.zip` | Pre-hysteresis (stable holds v1) |
+| `TARS-backup-AUDIT2-20260912.zip` | Current best: audit hardening II (banked dwell, teleport cut, kind toggles) |
 
 ## Git tags (exact snapshots, on GitHub `CYRUS-pinto/pi-3-Bot`)
 
@@ -17,7 +19,9 @@ versioned in git and on GitHub, so there are 3 independent copies.
 |-----|----------|
 | `backup-flick-event-20260912` | Flick-event model |
 | `backup-oldversion-20260912` | Old stable version |
-| `backup-holdbase-20260912` | Current base before hold-gestures |
+| `backup-holdbase-20260912` | Base before hold-gestures |
+| `backup-prehysteresis-20260912` | Pre-hysteresis (stable holds v1) |
+| `backup-audit2-20260912` | Current best: audit hardening II |
 
 ## How to SEND a backup to someone
 
