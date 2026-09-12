@@ -14,6 +14,12 @@ pygame.display.set_mode((64, 64))
 
 import main as M
 
+# ponytail: hermetic — the Pi's live calibration carries user-dragged face values that
+# would move geometry mid-test. Pin defaults, restore after (proven by a Pi-only failure).
+import config as _C
+_saved_layout = (_C.FACE_CX_RATIO, _C.FACE_CY_RATIO, _C.FACE_SIZE)
+_C.FACE_CX_RATIO, _C.FACE_CY_RATIO, _C.FACE_SIZE = 0.5, None, 1.0
+
 random.seed(7)
 
 
@@ -114,4 +120,5 @@ test_rects_both_angles()
 test_points_both_angles()
 test_scale_for()
 test_face_strip_equivalence()
+_C.FACE_CX_RATIO, _C.FACE_CY_RATIO, _C.FACE_SIZE = _saved_layout
 print("STRIP_OK")
