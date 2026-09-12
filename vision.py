@@ -390,9 +390,52 @@ class OpticalGestureEngine:
         self.body_motion_history: list[tuple[float, float]] = []  # (body_cx, timestamp)
         self.walk_lockout_until = 0.0
         self.walk_veto_until = 0.0       # ponytail crowds: fire veto while presenter travels (tracking continues)
+        self._hold_zone = ""             # ponytail holds: current dwell zone LEFT/RIGHT/TOP/""
+        self._hold_start = 0.0           # when the current dwell began
+        self._hold_fired_zone = ""       # zone already fired (must leave before refire — no key-repeat)
+        self._twohand_start = 0.0        # when the two-hand pose first appeared
+        self._twohand_last_seen = 0.0    # last frame both hands visible (0.25s grace against contour flicker)
+        self._twohand_fired = False
+        self._pending_fire = None      # ponytail holds: hold/two-hand fire carrier (returned at end of process)
         self.is_presenter_walking = False
         self.kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5)) if HAS_CV2 else None
         self.last_latency_ms = 0.0
+
+    def _arm_fire(self, candidate, current_time, via="swipe"):
+        """Shared fire bookkeeping for swipe + hold + two-hand: opposite lockout, echo gates,
+        history anchor, HUD banner. ponytail holds 2026-09-12: factored out of the sweep
+        evaluator so every gesture kind composes with the same timing windows."""
+        _opp = {"SWIPE_RIGHT": "SWIPE_LEFT", "SWIPE_LEFT": "SWIPE_RIGHT",
+                "SWIPE_UP": "SWIPE_DOWN", "SWIPE_DOWN": "SWIPE_UP"}
+        rebound_time = getattr(config, "GESTURE_REBOUND_LOCKOUT_SEC", 0.60)
+        if candidate in _opp:
+            self.locked_rebound_gesture = _opp[candidate]
+            self.rebound_lockout_until = current_time + rebound_time
+        self.last_swipe_time = current_time
+        self.last_swipe_fired_t = current_time  # anchor: history before this point is stale
+        self._last_fired_gesture = candidate   # same-direction echo gate
+        self.hand_must_settle = False
+        self.latest_gesture = candidate
+        self.gesture_display_until = current_time + 1.6
+        self.history.clear()
+        if getattr(config, "GESTURE_DEBUG_LOGS", True):
+            config.tlog("GestureHUD", f"GESTURE FIRED -> {candidate} via {via} (rebound {rebound_time:.1f}s, same-dir {getattr(config, 'GESTURE_SAME_DIR_SEC', 0.45):.2f}s)")
+        return candidate
+
+    def _hold_gates_pass(self, candidate, now):
+        """Do the shared timing windows allow this hold/two-hand candidate? Mirrors the sweep
+        evaluator's gates: refractory gap, travel veto, opposite return-stroke lockout, and the
+        same-direction echo window. A swipe ending parked inside a zone must never auto-fire."""
+        if now - self.last_swipe_time <= getattr(config, "GESTURE_REFRACTORY_SEC", 0.35):
+            return False
+        if now < self.walk_veto_until:
+            return False
+        if now < self.rebound_lockout_until and candidate == self.locked_rebound_gesture:
+            return False
+        if self._last_fired_gesture and candidate == self._last_fired_gesture and \
+                (now - self.last_swipe_time) < getattr(config, "GESTURE_SAME_DIR_SEC", 0.45):
+            return False
+        return True
 
     def process(self, frame, face_boxes=None, pre_small=None) -> str | None:
         if not getattr(config, "GESTURE_SWIPE_ENABLED", True) or (frame is None and pre_small is None) or not HAS_CV2:
@@ -565,7 +608,8 @@ class OpticalGestureEngine:
         else:
             self.body_motion_history.clear()
 
-        # Find best hand/arm candidate:
+        # Find best hand/arm candidate (+ census every qualifying hand for the two-hand pose):
+        _hand_spots = []  # (cx, cy) of each hand-size contour — two-hand command needs two
         for c in contours:
             area = cv2.contourArea(c)
             bx, by, bw, bh = cv2.boundingRect(c)
@@ -574,6 +618,7 @@ class OpticalGestureEngine:
 
             # Hand/arm candidate: compact width (<= 0.34), height up to 0.54, area <= max_hand_area
             if min_hand_area <= area <= max_hand_area and norm_bw <= 0.34 and norm_bh <= 0.54:
+                _hand_spots.append(((bx + bw * 0.5) / gw, (by + bh * 0.5) / gh))
                 if area > max_area:
                     max_area = area
                     best_cnt = c
@@ -591,6 +636,35 @@ class OpticalGestureEngine:
                 if getattr(config, "GESTURE_DEBUG_LOGS", True):
                     config.tlog("GestureHUD", f"BYSTANDER HAND IGNORED (hand=({_hcx:.2f},{_hcy:.2f}) presenter=({_pcx:.2f},{_pcy:.2f}))")
                 best_cnt = None
+
+        # Two-hand command: two hand-size contours, well separated, both belonging to the
+        # presenter (pair midpoint near them). The deliberate "everybody look" pose — impossible
+        # to trigger by accident, so it earns the big action (slides overview). 0.25s grace
+        # absorbs contour flicker; must fully leave to re-arm (no key-repeat).
+        self._pending_fire = None
+        if getattr(config, "GESTURE_TWOHAND_ENABLED", True) and len(_hand_spots) >= 2:
+            _pair = max(((abs(a[0] - b[0]), a, b) for i, a in enumerate(_hand_spots) for b in _hand_spots[i + 1:]),
+                        key=lambda t: t[0], default=(0.0, None, None))
+            if _pair[0] > 0.35 and _pair[1][1] < 0.75 and _pair[2][1] < 0.75:
+                _mid_x = (_pair[1][0] + _pair[2][0]) * 0.5
+                _owned = True
+                if face_boxes and len(face_boxes) > 0:
+                    _pfx, _pfy, _pfw, _pfh = face_boxes[0]
+                    _owned = abs(_mid_x - (_pfx + _pfw * 0.5)) <= 0.55
+                if _owned:
+                    self._twohand_last_seen = now
+                    if self._twohand_start == 0.0:
+                        self._twohand_start = now
+                    if not self._twohand_fired and (now - self._twohand_start) >= getattr(config, "GESTURE_TWOHAND_SEC", 1.0):
+                        if self._hold_gates_pass("SWIPE_DOWN", now):
+                            self._twohand_fired = True
+                            self._pending_fire = self._arm_fire("SWIPE_DOWN", now, via="twohand")
+        if self._pending_fire is None:
+            if self._twohand_fired and (now - self._twohand_last_seen) > 0.5:
+                self._twohand_fired = False  # pose fully left -> re-arm
+                self._twohand_start = 0.0
+            elif not self._twohand_fired and (now - self._twohand_last_seen) > 0.25:
+                self._twohand_start = 0.0    # flicker gap too long -> restart the dwell clock
 
         if body_translating:
             debounce = getattr(config, "GESTURE_WALK_DEBOUNCE_SEC", 0.65)
@@ -790,30 +864,7 @@ class OpticalGestureEngine:
                 if self._confirm_n < _need:
                     return None
 
-                rebound_time = getattr(config, "GESTURE_REBOUND_LOCKOUT_SEC", 0.60)
-                if candidate == "SWIPE_RIGHT":
-                    self.locked_rebound_gesture = "SWIPE_LEFT"
-                    self.rebound_lockout_until = current_time + rebound_time
-                elif candidate == "SWIPE_LEFT":
-                    self.locked_rebound_gesture = "SWIPE_RIGHT"
-                    self.rebound_lockout_until = current_time + rebound_time
-                elif candidate == "SWIPE_UP":
-                    self.locked_rebound_gesture = "SWIPE_DOWN"
-                    self.rebound_lockout_until = current_time + rebound_time
-                elif candidate == "SWIPE_DOWN":
-                    self.locked_rebound_gesture = "SWIPE_UP"
-                    self.rebound_lockout_until = current_time + rebound_time
-
-                self.last_swipe_time = current_time
-                self.last_swipe_fired_t = current_time  # anchor: history before this point is stale
-                self._last_fired_gesture = candidate   # same-direction echo gate above
-                self.hand_must_settle = False          # ponytail 2026-09-12: no settle-wait — next flick's wind-up must survive
-                self.latest_gesture = candidate
-                self.gesture_display_until = current_time + 1.6
-                self.history.clear()
-                if getattr(config, "GESTURE_DEBUG_LOGS", True):
-                    config.tlog("GestureHUD", f"GESTURE FIRED -> {candidate} (rebound {rebound_time:.1f}s, same-dir {getattr(config, 'GESTURE_SAME_DIR_SEC', 0.45):.2f}s)")
-                return candidate
+                return self._arm_fire(candidate, current_time, via="swipe")
 
             return None
 
@@ -822,6 +873,8 @@ class OpticalGestureEngine:
             self.hand_detected = False
             self.hand_box = None
             self.hand_must_settle = False
+            self._hold_zone = ""           # hand gone -> hold state resets (re-entry can fire fresh)
+            self._hold_fired_zone = ""
             # Check if swipe finished right before hand came to rest
             if len(self.history) >= 3:
                 result_gesture = evaluate_virtual_screen_sweep(self.history, now)
@@ -860,7 +913,43 @@ class OpticalGestureEngine:
                     if getattr(config, "GESTURE_DEBUG_LOGS", True):
                         config.tlog("GestureHUD", f"Hand settled (v={v_inst:.2f}) -> Gesture recognition resumed")
 
+            # HOLD-ZONE gestures (highest accuracy tier): a still hand dwelling in LEFT / RIGHT /
+            # TOP-center. Position + stillness — no shape reading, so sleeves, gloves, lighting and
+            # body type cannot fool it. Naturally exclusive with swipes (a swipe crosses a zone far
+            # too fast to dwell). No key-repeat: the zone must be left before it can fire again.
+            if getattr(config, "GESTURE_HOLD_ENABLED", True):
+                if cy < 0.38 and 0.30 < cx < 0.70:
+                    _zone = "TOP"
+                elif cx < 0.42:
+                    _zone = "LEFT"
+                elif cx > 0.58:
+                    _zone = "RIGHT"
+                else:
+                    _zone = ""
+                _still = True
+                if len(self.history) >= 2:
+                    _h0, _h1 = self.history[-2], self.history[-1]
+                    _hdt = max(0.02, _h1[2] - _h0[2])
+                    _hmax = getattr(config, "GESTURE_HOLD_MAX_SPEED", 0.25)
+                    _still = (abs(_h1[3] - _h0[3]) / _hdt) < _hmax and (abs(_h1[4] - _h0[4]) / _hdt) < _hmax
+                if _zone == "" or not _still:
+                    self._hold_zone = _zone
+                    self._hold_start = now
+                    if _zone == "":
+                        self._hold_fired_zone = ""  # fully left the zones -> re-arm
+                elif _zone != self._hold_zone:
+                    self._hold_zone = _zone
+                    self._hold_start = now
+                elif _zone != self._hold_fired_zone and (now - self._hold_start) >= getattr(config, "GESTURE_HOLD_SEC", 0.8):
+                    _hc = {"LEFT": "SWIPE_LEFT", "RIGHT": "SWIPE_RIGHT", "TOP": "SWIPE_UP"}[_zone]
+                    if self._hold_gates_pass(_hc, now):
+                        self._hold_fired_zone = _zone
+                        self._pending_fire = self._arm_fire(_hc, now, via="hold")
+
             result_gesture = evaluate_virtual_screen_sweep(self.history, now)
+            if self._pending_fire is not None:  # hold/two-hand fired above (history was cleared)
+                result_gesture = self._pending_fire
+                self._pending_fire = None
 
             # Live terminal telemetry
             if getattr(config, "GESTURE_DEBUG_LOGS", False) and len(self.history) >= 2:

@@ -207,6 +207,11 @@ GESTURE_WALK_DEBOUNCE_SEC  = 1.20 # ponytail: was 2.50 — 2.5s dead zone after 
 GESTURE_MAX_HAND_AREA      = 0.095# Maximum contour area fraction (0.095 = 9.5% of frame; allows extended arm)
 GESTURE_HAND_MIN_Y     = 0.10     # Interaction elevation ceiling (ignores ceiling light/fan motion)
 GESTURE_HAND_MAX_Y     = 0.80     # Interaction elevation floor (0.80 allows chest & mid-torso hand swipes)
+GESTURE_HOLD_ENABLED   = True     # Hold-zone gestures: dwell hand in LEFT/RIGHT/TOP zone (highest accuracy — position + stillness, no shape reading)
+GESTURE_HOLD_SEC       = 0.8      # Dwell time to fire a hold (seconds). No key-repeat: must leave zone before refire
+GESTURE_HOLD_MAX_SPEED = 0.25     # Must be this still to count as holding (a swipe passing through is faster — naturally exclusive)
+GESTURE_TWOHAND_ENABLED = True    # Two-hand command: both hands up/visible together (the deliberate "everybody look" pose)
+GESTURE_TWOHAND_SEC    = 1.0      # How long both hands must be present together to fire (maps to slides overview)
 # Screen Physical Rotation:
 #   0   : Standard Landscape / Native
 #   90  : Vertical / Portrait (Clockwise)
