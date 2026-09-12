@@ -553,7 +553,7 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
       </div>
       <div style="display:flex; align-items:center; gap:6px;">
         <button onclick="adjustCooldown(-0.1)" style="padding:6px 12px; font-size:12px; font-weight:bold; background:#0d1117; border-color:#2a3242;">-0.1s</button>
-        <input type="number" id="inpCooldown" min="0.3" max="3.0" step="0.1" value="1.0" onchange="onCooldownInput(this.value)" style="width:64px; text-align:center; background:#0d1117; border:1px solid var(--border); border-radius:6px; color:var(--gold); font-weight:bold; font-size:13px; padding:5px 2px; outline:none;" />
+        <input type="number" id="inpCooldown" min="0.3" max="3.0" step="0.1" value="0.45" onchange="onCooldownInput(this.value)" style="width:64px; text-align:center; background:#0d1117; border:1px solid var(--border); border-radius:6px; color:var(--gold); font-weight:bold; font-size:13px; padding:5px 2px; outline:none;" />
         <span style="font-size:12px; color:var(--gold); font-weight:bold;">sec</span>
         <button onclick="adjustCooldown(0.1)" style="padding:6px 12px; font-size:12px; font-weight:bold; background:#0d1117; border-color:#2a3242;">+0.1s</button>
       </div>
@@ -659,9 +659,9 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
   <div style="margin-bottom:12px;">
     <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--muted); margin-bottom:2px;">
       <span>⏳ GESTURE COOLDOWN &amp; LOCKOUT</span>
-      <span id="lblGestureCooldown" style="color:var(--gold); font-weight:bold;">1.0s</span>
+      <span id="lblGestureCooldown" style="color:var(--gold); font-weight:bold;">0.45s</span>
     </div>
-    <input type="range" id="rngGestureCooldown" min="0.3" max="3.0" step="0.1" value="1.0" oninput="onCalibSliderChange()" style="width:100%; accent-color:var(--gold);">
+    <input type="range" id="rngGestureCooldown" min="0.3" max="3.0" step="0.1" value="0.45" oninput="onCalibSliderChange()" style="width:100%; accent-color:var(--gold);">
     <div style="font-size:9px; color:#555d6e; margin-top:2px;">MINIMUM TIME BETWEEN GESTURES &bull; HIGHER (1.2s–1.5s) = ZERO FALSE TRIGGERS</div>
   </div>
 
@@ -2041,7 +2041,7 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
       sens_x: 2.4,
       sens_y: 2.2,
       gesture_sens: 1.0,
-      gesture_cooldown: 1.0,
+      gesture_cooldown: 0.45,
       sens_left: 1.0,
       sens_right: 1.0,
       sens_up: 1.0,
@@ -2064,12 +2064,12 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     if (rsd) rsd.value = 1.0;
 
     const rgcd = document.getElementById('rngGestureCooldown');
-    if (rgcd) rgcd.value = 1.0;
+    if (rgcd) rgcd.value = 0.45;
     const lcd = document.getElementById('lblGestureCooldown');
-    if (lcd) lcd.textContent = '1.0s';
+    if (lcd) lcd.textContent = '0.45s';
     const icd = document.getElementById('inpCooldown');
-    if (icd) icd.value = '1.0';
-    currentCooldown = 1.0;
+    if (icd) icd.value = '0.45';
+    currentCooldown = 0.45;
 
     document.getElementById('rngOffX').value = 0.0;
     document.getElementById('rngOffY').value = 0.0;
@@ -2340,7 +2340,7 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     }).catch(()=>{});
   }
 
-  let currentCooldown = 1.0;
+  let currentCooldown = 0.45;
   function updateCooldownUI(val) {
     if (val === undefined) return;
     currentCooldown = Math.max(0.3, Math.min(3.0, parseFloat(val) || 1.0));

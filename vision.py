@@ -371,6 +371,7 @@ class OpticalGestureEngine:
         self.locked_rebound_gesture = ""
         self.rebound_lockout_until = 0.0
         self.last_swipe_fired_t = 0.0      # Timestamp when last swipe was fired (history before this is stale)
+        self._last_fired_gesture = ""      # ponytail 2026-09-12: flick-event model — same-direction repeats use SAME_DIR window, not settle-wait
         self._confirm_cand = ""            # Confirm-N streak state (GESTURE_CONFIRM_N)
         self._confirm_n = 0
         self.hand_must_settle = False
@@ -474,7 +475,12 @@ class OpticalGestureEngine:
         # 2. Motion frame difference
         diff = cv2.absdiff(gray, self.prev_gray)
         self.prev_gray = gray
-        _, motion_mask = cv2.threshold(diff, 14, 255, cv2.THRESH_BINARY)
+        # ponytail accuracy 2026-09-12: adaptive motion floor for any-lighting (event halls swing
+        # bright/dim). Quiet dark frame -> floor 12 (sensitive); flickery bright hall -> up to 25.
+        # One SIMD mean pass (~0.1ms), cheaper than the ghosts it prevents.
+        _mean_motion = cv2.mean(diff)[0]
+        _motion_thr = min(25.0, max(12.0, _mean_motion * 1.5))
+        _, motion_mask = cv2.threshold(diff, _motion_thr, 255, cv2.THRESH_BINARY)
 
         # 3. Head & Collar Shield (Persisted 1.2s against face dropouts)
         # Masks ONLY the head, chin, and neck collar to avoid talking/nodding triggers.
@@ -506,7 +512,15 @@ class OpticalGestureEngine:
         # countNonZero is one SIMD pass. Falls through to the natural no-hand path (sweep eval on history still runs).
         # Hand-size scaled (pocket remote: kids = smaller hands): threshold tracks the filter below exactly.
         _hsz = max(0.5, min(2.0, float(getattr(config, "GESTURE_HAND_SIZE", 1.0))))
-        if cv2.countNonZero(motion_mask) < (gw * gh) * 0.005 * _hsz:
+        # ponytail accuracy 2026-09-12: distance-adaptive geometry — works for ANY person/distance.
+        # Face height is the ruler (nh~0.087 = 2.2m sofa reference). Far people make small apparent
+        # motions (fixed gates = misses); close people make huge ones (fixed gates = ghosts).
+        # Linear scale for distances/speeds, squared for areas. No face -> neutral 1.0.
+        _face_h = face_boxes[0][3] if face_boxes and len(face_boxes) > 0 else 0.087
+        dist_scale = min(1.6, max(0.6, _face_h / 0.087))
+        area_scale = dist_scale * dist_scale
+        self._dist_scale = dist_scale  # sweep evaluator (closure below) normalizes by this
+        if cv2.countNonZero(motion_mask) < (gw * gh) * 0.005 * _hsz * area_scale:
             contours = []
         else:
             # Morphological closing using cached kernel
@@ -515,8 +529,8 @@ class OpticalGestureEngine:
 
         # 5. Find coherent moving hand contour in the interaction plane
         contours, _ = cv2.findContours(motion_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        min_hand_area = (gw * gh) * 0.005 * _hsz  # ~0.5% of screen area, hand-size scaled
-        max_hand_area = (gw * gh) * getattr(config, "GESTURE_MAX_HAND_AREA", 0.085) * _hsz
+        min_hand_area = (gw * gh) * 0.005 * _hsz * area_scale  # ~0.5% of screen area, hand-size + distance scaled
+        max_hand_area = (gw * gh) * getattr(config, "GESTURE_MAX_HAND_AREA", 0.085) * _hsz * area_scale
 
         best_cnt = None
         max_area = 0
@@ -569,13 +583,14 @@ class OpticalGestureEngine:
             self.last_latency_ms = (time.perf_counter() - t_start) * 1000.0
             return None
 
-        cooldown = getattr(config, "GESTURE_COOLDOWN_SEC", 1.00)
+        cooldown = getattr(config, "GESTURE_REFRACTORY_SEC", 0.35)
         sens = getattr(config, "GESTURE_SWIPE_SENSITIVITY", self.sensitivity)
         min_sweep_dist = getattr(config, "GESTURE_SWIPE_DISTANCE", 0.18) / max(0.5, sens)
         drop_reset_y = getattr(config, "GESTURE_DROP_RESET_Y", 0.72)
 
-        # Strict Cooldown Lockout across ALL directions:
-        # While in cooldown, continuously wipe history so swipes during cooldown CANNOT queue or trigger later!
+        # Refractory window (was: 1.00s unified cooldown that wiped ALL motion — the "delayed/queued"
+        # feel: a 2nd flick's wind-up was erased before it could fire). 0.35s only covers the same
+        # stroke echoing across frames; wind-up for the next flick survives from here on.
         if now - self.last_swipe_time <= cooldown:
             self.history.clear()
             self.hand_must_settle = False
@@ -603,8 +618,10 @@ class OpticalGestureEngine:
         def evaluate_virtual_screen_sweep(history, current_time) -> str | None:
             if len(history) < 3 or (current_time - self.last_swipe_time <= cooldown):
                 return None
-            # Hand must fully decelerate to a near-stop after any swipe before a new
-            # gesture is recognised — this is the primary return-stroke leak guard.
+            # ponytail 2026-09-12: settle-wait REMOVED as post-fire gate — it forced a full stop
+            # between flicks (2nd flick's wind-up kept the hand "moving" so recognition never resumed).
+            # Return-stroke duty now belongs to the rebound window + fired-history anchor below.
+            # The flag survives only as a fail-safe (nothing sets it post-fire anymore).
             if self.hand_must_settle:
                 return None
 
@@ -634,13 +651,13 @@ class OpticalGestureEngine:
                 is_user_right = (dx < 0) if mirror_mode else (dx > 0)
                 dir_sens_h = getattr(config, "GESTURE_SENS_RIGHT", 1.0) if is_user_right else getattr(config, "GESTURE_SENS_LEFT", 1.0)
                 eff_sens_h = max(0.2, sens * dir_sens_h)
-                h_min_dist = getattr(config, "GESTURE_SWIPE_DISTANCE", 0.18) / eff_sens_h
+                h_min_dist = getattr(config, "GESTURE_SWIPE_DISTANCE", 0.18) / eff_sens_h * dist_scale
 
                 # Requires relative displacement >= h_min_dist, horizontal dominance (dx > 1.20*dy), speed > 0.30.
                 # ponytail: flick-forward tuning (2026-09-12, live complaint: casual motion fired swipes).
                 # Slow drifts now fall through to the flick shortcut below (needs real speed); deliberate
                 # full sweeps still pass comfortably (they run 1.0+). Threshold, not structure.
-                if abs(dx) >= h_min_dist and abs(dx) > (1.20 * abs(dy)) and speed_x > 0.30:
+                if abs(dx) >= h_min_dist and abs(dx) > (1.20 * abs(dy)) and speed_x > 0.30 * dist_scale:
                     # Parallax check against head translation:
                     # If head is also traveling in the same direction at walking speed and relative displacement is small,
                     # this is whole-body translation (walking), not an isolated hand swipe!
@@ -664,8 +681,8 @@ class OpticalGestureEngine:
                 # upgrades it below. No parallax check: walking bodies move <0.3, flick needs >0.55.
                 # Only when no HORIZ candidate yet (never overrides a proper sweep).
                 if best_sweep is None:
-                    _fmin = getattr(config, "GESTURE_FLICK_DISTANCE", 0.10) / eff_sens_h
-                    _fspd = getattr(config, "GESTURE_FLICK_SPEED", 0.55)
+                    _fmin = getattr(config, "GESTURE_FLICK_DISTANCE", 0.10) / eff_sens_h * dist_scale
+                    _fspd = getattr(config, "GESTURE_FLICK_SPEED", 0.55) * dist_scale
                     if abs(dx) >= _fmin and abs(dx) > (1.50 * abs(dy)) and speed_x > _fspd:
                         if abs(dx) > max_disp:
                             max_disp = abs(dx)
@@ -677,23 +694,23 @@ class OpticalGestureEngine:
                     is_user_up = (dy > 0) if inv_y else (dy < 0)
                     dir_sens_v = getattr(config, "GESTURE_SENS_UP", 1.0) if is_user_up else getattr(config, "GESTURE_SENS_DOWN", 1.0)
                     eff_sens_v = max(0.2, sens * dir_sens_v)
-                    v_min = getattr(config, "GESTURE_VERTICAL_DISTANCE", 0.12) / eff_sens_v
+                    v_min = getattr(config, "GESTURE_VERTICAL_DISTANCE", 0.12) / eff_sens_v * dist_scale
                     # SWIPE UP: hand moves upward — clean vertical dominance
                     if dy < 0 and orig_cy >= 0.18 and curr_cy <= 0.70:
-                        if abs(dy) >= v_min and abs(dy) > (1.20 * abs(dx)) and speed_y > 0.20:
+                        if abs(dy) >= v_min and abs(dy) > (1.20 * abs(dx)) and speed_y > 0.20 * dist_scale:
                             if abs(dy) > max_disp:
                                 max_disp = abs(dy)
                                 best_sweep = ("VERT", dy)
                     # SWIPE DOWN: hand moves downward — clean vertical dominance
                     elif dy > 0 and orig_cy <= 0.70 and curr_cy >= 0.20:
-                        if abs(dy) >= v_min and abs(dy) > (1.20 * abs(dx)) and speed_y > 0.20:
+                        if abs(dy) >= v_min and abs(dy) > (1.20 * abs(dx)) and speed_y > 0.20 * dist_scale:
                             if abs(dy) > max_disp:
                                 max_disp = abs(dy)
                                 best_sweep = ("VERT", dy)
                     # Vertical flick: same kid-style shortcut as horizontal (short + fast).
                     if best_sweep is None and getattr(config, "GESTURE_MODE", "4_WAY") != "HORIZONTAL_SWIPE":
-                        _vfmin = getattr(config, "GESTURE_FLICK_VDISTANCE", 0.08) / eff_sens_v
-                        _vfspd = getattr(config, "GESTURE_FLICK_SPEED", 0.55)
+                        _vfmin = getattr(config, "GESTURE_FLICK_VDISTANCE", 0.08) / eff_sens_v * dist_scale
+                        _vfspd = getattr(config, "GESTURE_FLICK_SPEED", 0.55) * dist_scale
                         if abs(dy) >= _vfmin and abs(dy) > (1.50 * abs(dx)) and speed_y > _vfspd:
                             if abs(dy) > max_disp:
                                 max_disp = abs(dy)
@@ -721,6 +738,13 @@ class OpticalGestureEngine:
                     candidate = "SWIPE_UP" if delta_val < 0 else "SWIPE_DOWN"
 
             if candidate is not None:
+                # Same-direction echo gate: a fresh flick needs SAME_DIR gap; anything sooner is the
+                # previous stroke still unwinding across frames (history.clear on fire usually eats it,
+                # this covers the tail). Real-world paging rhythm is ~0.5-0.8s, so 0.45 never blocks intent.
+                _gap = current_time - self.last_swipe_time
+                if self._last_fired_gesture and candidate == self._last_fired_gesture and \
+                        _gap < getattr(config, "GESTURE_SAME_DIR_SEC", 0.45):
+                    return None
                 # Discard opposite return stroke during lockout window
                 if current_time < self.rebound_lockout_until and candidate == self.locked_rebound_gesture:
                     if getattr(config, "GESTURE_DEBUG_LOGS", True):
@@ -756,12 +780,13 @@ class OpticalGestureEngine:
 
                 self.last_swipe_time = current_time
                 self.last_swipe_fired_t = current_time  # anchor: history before this point is stale
-                self.hand_must_settle = True             # block new gestures until hand decelerates to rest
+                self._last_fired_gesture = candidate   # same-direction echo gate above
+                self.hand_must_settle = False          # ponytail 2026-09-12: no settle-wait — next flick's wind-up must survive
                 self.latest_gesture = candidate
                 self.gesture_display_until = current_time + 1.6
                 self.history.clear()
                 if getattr(config, "GESTURE_DEBUG_LOGS", True):
-                    config.tlog("GestureHUD", f"GESTURE FIRED -> {candidate} (rebound filter armed for {rebound_time:.1f}s, waiting for hand settle)")
+                    config.tlog("GestureHUD", f"GESTURE FIRED -> {candidate} (rebound {rebound_time:.1f}s, same-dir {getattr(config, 'GESTURE_SAME_DIR_SEC', 0.45):.2f}s)")
                 return candidate
 
             return None

@@ -143,7 +143,7 @@ VSLIDE_ROT    = 0      # slide content rotation inside the box: 0, 90, 180, 270
 SLIDE_TEXT    = {}     # pocket-remote text overrides: {index-str: {name, desc}}; length-capped at apply
 SLIDE_TEXT_REV = 0     # bumped on every text edit so cached statics rebuild
 GESTURE_HAND_SIZE = 1.0  # hand-size scale for every-user accuracy (kids ~0.6, adults ~1.0-1.3); remote slider
-GESTURE_CONFIRM_N = 1    # fire after N consecutive same-direction evaluations (1 = instant, 2-3 = false-trigger-proof)
+GESTURE_CONFIRM_N = 2    # ponytail accuracy 2026-09-12: was 1 — single-frame motion noise (sleeves, light flicker, flailing) fired slides alone. 2 costs ~1 AI frame (~65ms, invisible) and kills almost all ghosts.
 FOAM_L = 0.0             # visible-screen margins as fractions (thermocol eats edges; FIT VISIBLE uses these)
 FOAM_T = 0.0
 FOAM_R = 0.0
@@ -181,8 +181,10 @@ GESTURE_SENS_LEFT         = 1.0   # Directional multiplier for Swipe Left (0.3x 
 GESTURE_SENS_RIGHT        = 1.0   # Directional multiplier for Swipe Right (0.3x to 3.0x)
 GESTURE_SENS_UP           = 1.0   # Directional multiplier for Swipe Up (0.3x to 3.0x)
 GESTURE_SENS_DOWN         = 1.0   # Directional multiplier for Swipe Down (0.3x to 3.0x)
-GESTURE_COOLDOWN_SEC  = 1.00     # Cooldown between same-direction gestures (prevents multi-triggering)
-GESTURE_REBOUND_LOCKOUT_SEC = 0.55 # Antigravity perf analysis #2: 1.40s suppressed deliberate double-swipes; return-stroke guard only (vision.py:616), same-direction repeat still gated by COOLDOWN 1.0s + 0.60s re-fire gate (vision.py:501)
+GESTURE_COOLDOWN_SEC  = 0.45     # ponytail 2026-09-12: was 1.00 — a full second of wiped history ate every rapid 2nd flick (felt "delayed/queued"). 0.45 = same-stroke echo guard + real-time paging.
+GESTURE_REFRACTORY_SEC = 0.35    # Absolute min gap after a fire: history wiped, nothing evaluates. Covers multi-frame re-fire of the same stroke.
+GESTURE_SAME_DIR_SEC = 0.45      # Same-direction repeat needs this gap (rapid next-next-next paging). Opposite stays locked longer (return stroke), axis switch only waits refractory.
+GESTURE_REBOUND_LOCKOUT_SEC = 0.70 # Return-stroke guard: opposite direction suppressed this long after a fire (fast yank-backs take ~0.3-0.5s). Hand-drop-to-rest still clears early (vision.py drop-reset).
 GESTURE_DROP_RESET_Y  = 0.72     # Hand dropped below upper abdomen & settled clears rebound lockout (min 0.6s post-swipe)
 GESTURE_DEBUG_LOGS    = False    # ponytail: off by default — terminal spam costs CPU over SSH; enable via calibration only when tuning
 SWIPE_ANIMATION_ENABLED = True   # Visual scan-line sweep animation on TV when swipe occurs
@@ -248,6 +250,7 @@ def load_calibration():
     global PIP_X, PIP_Y, PIP_CROP, SLIDE_ZOOM, SLIDE_X, SLIDE_Y
     global VSLIDE_MODE, VSLIDE_SCALE, VSLIDE_X, VSLIDE_Y, VSLIDE_FIT, VSLIDE_ROT
     global SLIDE_TEXT, SLIDE_TEXT_REV, GESTURE_HAND_SIZE, GESTURE_CONFIRM_N
+    global GESTURE_REFRACTORY_SEC, GESTURE_SAME_DIR_SEC
     global FOAM_L, FOAM_T, FOAM_R, FOAM_B, VIEW_X, VIEW_Y, VIEW_W, VIEW_H
     if os.path.exists(CALIBRATION_FILE):
         try:
@@ -274,6 +277,8 @@ def load_calibration():
             GESTURE_SENS_UP = float(data.get("sens_up", GESTURE_SENS_UP))
             GESTURE_SENS_DOWN = float(data.get("sens_down", GESTURE_SENS_DOWN))
             GESTURE_COOLDOWN_SEC = float(data.get("gesture_cooldown_sec", data.get("gesture_cooldown", GESTURE_COOLDOWN_SEC)))
+            GESTURE_REFRACTORY_SEC = float(data.get("gesture_refractory_sec", GESTURE_REFRACTORY_SEC))
+            GESTURE_SAME_DIR_SEC = float(data.get("gesture_same_dir_sec", GESTURE_SAME_DIR_SEC))
             SWIPE_ANIMATION_ENABLED = bool(data.get("swipe_animation_enabled", data.get("swipe_anim_enabled", SWIPE_ANIMATION_ENABLED)))
             SCREEN_ROTATION = int(data.get("screen_rotation", SCREEN_ROTATION))
             CAMERA_ROTATION = int(data.get("camera_rotation", CAMERA_ROTATION))
@@ -367,6 +372,8 @@ def save_calibration():
         "sens_down": GESTURE_SENS_DOWN,
         "gesture_cooldown": GESTURE_COOLDOWN_SEC,
         "gesture_cooldown_sec": GESTURE_COOLDOWN_SEC,
+        "gesture_refractory_sec": GESTURE_REFRACTORY_SEC,
+        "gesture_same_dir_sec": GESTURE_SAME_DIR_SEC,
         "swipe_anim_enabled": SWIPE_ANIMATION_ENABLED,
         "swipe_animation_enabled": SWIPE_ANIMATION_ENABLED,
         "screen_rotation": SCREEN_ROTATION,
