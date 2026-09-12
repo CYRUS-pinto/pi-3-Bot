@@ -1,0 +1,16 @@
+# TARS camera watchdog: keeps the phone camera reachable across every restart.
+# Install once:
+#   sudo cp tars-camwatch.service /etc/systemd/system/ && sudo systemctl enable --now tars-camwatch
+[Unit]
+Description=TARS camera watchdog (ADB forward + IP Webcam auto-start)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=cyrus
+ExecStart=/home/cyrus/TARS/tars-camwatch.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
