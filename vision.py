@@ -636,8 +636,11 @@ class OpticalGestureEngine:
                 eff_sens_h = max(0.2, sens * dir_sens_h)
                 h_min_dist = getattr(config, "GESTURE_SWIPE_DISTANCE", 0.18) / eff_sens_h
 
-                # Requires relative displacement >= h_min_dist, horizontal dominance (dx > 1.20*dy), speed > 0.20
-                if abs(dx) >= h_min_dist and abs(dx) > (1.20 * abs(dy)) and speed_x > 0.20:
+                # Requires relative displacement >= h_min_dist, horizontal dominance (dx > 1.20*dy), speed > 0.30.
+                # ponytail: flick-forward tuning (2026-09-12, live complaint: casual motion fired swipes).
+                # Slow drifts now fall through to the flick shortcut below (needs real speed); deliberate
+                # full sweeps still pass comfortably (they run 1.0+). Threshold, not structure.
+                if abs(dx) >= h_min_dist and abs(dx) > (1.20 * abs(dy)) and speed_x > 0.30:
                     # Parallax check against head translation:
                     # If head is also traveling in the same direction at walking speed and relative displacement is small,
                     # this is whole-body translation (walking), not an isolated hand swipe!
@@ -677,13 +680,13 @@ class OpticalGestureEngine:
                     v_min = getattr(config, "GESTURE_VERTICAL_DISTANCE", 0.12) / eff_sens_v
                     # SWIPE UP: hand moves upward — clean vertical dominance
                     if dy < 0 and orig_cy >= 0.18 and curr_cy <= 0.70:
-                        if abs(dy) >= v_min and abs(dy) > (1.20 * abs(dx)) and speed_y > 0.12:
+                        if abs(dy) >= v_min and abs(dy) > (1.20 * abs(dx)) and speed_y > 0.20:
                             if abs(dy) > max_disp:
                                 max_disp = abs(dy)
                                 best_sweep = ("VERT", dy)
                     # SWIPE DOWN: hand moves downward — clean vertical dominance
                     elif dy > 0 and orig_cy <= 0.70 and curr_cy >= 0.20:
-                        if abs(dy) >= v_min and abs(dy) > (1.20 * abs(dx)) and speed_y > 0.12:
+                        if abs(dy) >= v_min and abs(dy) > (1.20 * abs(dx)) and speed_y > 0.20:
                             if abs(dy) > max_disp:
                                 max_disp = abs(dy)
                                 best_sweep = ("VERT", dy)
@@ -835,6 +838,10 @@ class FreshFrameGrabber:
                 base = src.rsplit("/", 1)[0]
                 import urllib.request, json as _json
                 urllib.request.urlopen(f"{base}/settings/video_size?set=640x480", timeout=0.8)
+                try:  # best-effort: JPEG quality 60 -> faster phone encode + less USB bytes (silent if unsupported)
+                    urllib.request.urlopen(f"{base}/settings/quality?set=60", timeout=0.8)
+                except Exception:
+                    pass
                 try:
                     _req = urllib.request.urlopen(f"{base}/status.json", timeout=0.8)
                     _size = _json.loads(_req.read().decode()).get("curvals", {}).get("video_size", "unknown")
@@ -908,6 +915,10 @@ class FreshFrameGrabber:
                             base = new_src.rsplit("/", 1)[0]
                             import urllib.request, json as _json
                             urllib.request.urlopen(f"{base}/settings/video_size?set=640x480", timeout=0.8)
+                            try:  # best-effort: JPEG quality 60 -> faster phone encode (silent if unsupported)
+                                urllib.request.urlopen(f"{base}/settings/quality?set=60", timeout=0.8)
+                            except Exception:
+                                pass
                             try:
                                 _req = urllib.request.urlopen(f"{base}/status.json", timeout=0.8)
                                 _size = _json.loads(_req.read().decode()).get("curvals", {}).get("video_size", "unknown")
