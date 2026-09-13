@@ -22,6 +22,12 @@ os.environ["OPENCV_FFMPEG_LOGLEVEL"] = "-8"
 os.environ["OPENCV_LOG_LEVEL"] = "SILENT"
 import config
 import pygame
+# ponytail: MediaPipe Hand Landmarker (optional)
+try:
+    from vision.hand_landmarker import HandLandmarker, is_pinch, is_pointing, is_fist
+    HAS_LANDMARKER = True
+except ImportError:
+    HAS_LANDMARKER = False
 
 try:
     import cv2
@@ -403,6 +409,15 @@ class OpticalGestureEngine:
         self._pending_fire = None      # ponytail holds: hold/two-hand fire carrier (returned at end of process)
         self.is_presenter_walking = False
         self.kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5)) if HAS_CV2 else None
+        # ponytail 2026-09-13: MediaPipe Hand Landmarker (optional, for finger counting, pinch, two-hand)
+        self._landmarker = None
+        if HAS_LANDMARKER and getattr(config, "GESTURE_LANDMARKER_ENABLED", True):
+            try:
+                model_path = getattr(config, "GESTURE_LANDMARKER_MODEL", "hand_landmarker.task")
+                self._landmarker = HandLandmarker(model_path)
+                config.tlog("GestureHUD", "MediaPipe Hand Landmarker initialized")
+            except Exception as e:
+                config.tlog("GestureHUD", f"Landmarker init failed: {e}")
         self.last_latency_ms = 0.0
 
     def _arm_fire(self, candidate, current_time, via="swipe"):
@@ -944,6 +959,26 @@ class OpticalGestureEngine:
             self.hand_box = (bx / gw, by / gh, bw / gw, bh / gh)
             self.hand_tip = (cx, cy)
 
+            # ponytail 2026-09-13: MediaPipe Hand Landmarker integration
+            # Run landmarker on the frame for finger counting, pinch, two-hand detection
+            self._landmark_result = None
+            if self._landmarker is not None:
+                try:
+                    self._landmarker.process(frame)
+                    self._landmark_result = self._landmarker.get_latest()
+                except Exception as e:
+                    config.tlog("GestureHUD", f"Landmarker error: {e}")
+
+            # Extract landmarks for gesture detection
+            self._landmarks_detected = False
+            self._landmarks_list = []
+            if self._landmark_result is not None:
+                for i in range(len(self._landmark_result.hand_landmarks)):
+                    lms = self._landmarker.get_landmarks(self._landmark_result, i)
+                    if lms:
+                        self._landmarks_detected = True
+                        self._landmarks_list.append(lms)
+
             if self.history and len(_hand_spots) < 2:
                 # ponytail 2026-09-12 audit: TELEPORT CUT. best-contour flips between two hands/people
                 # in one frame (>0.30 jump; a real flick moves <0.12/frame at 18fps). Evaluating across
@@ -1145,6 +1180,46 @@ class OpticalGestureEngine:
                     if self._hold_gates_pass(_hc, now):
                         self._hold_fired_zone = _zone
                         self._pending_fire = self._arm_fire(_hc, now, via="hold")
+
+            # ── Landmarker gestures (pinch, pointing, fist, two-hand) ──
+            # Runs after hold evaluation, before sweep, on coasted landmarks
+            if self._landmarks_detected and self._landmarks_list:
+                # Two-hand detection: two simultaneous landmark sets
+                if len(self._landmarks_list) >= 2 and getattr(config, "GESTURE_TWOHAND_ENABLED", True):
+                    if not self._twohand_fired:
+                        self._twohand_last_seen = now
+                        if self._twohand_start == 0.0:
+                            self._twohand_start = now
+                        if (now - self._twohand_start) >= getattr(config, "GESTURE_TWOHAND_SEC", 1.0):
+                            if self._hold_gates_pass("SWIPE_DOWN", now):
+                                self._twohand_fired = True
+                                self._pending_fire = self._arm_fire("SWIPE_DOWN", now, via="twohand")
+                                config.tlog("GestureHUD", "TWO-HAND FIRED -> SWIPE_DOWN")
+                else:
+                    if self._twohand_fired and (now - self._twohand_last_seen) > 0.5:
+                        self._twohand_fired = False
+                        self._twohand_start = 0.0
+                    elif not self._twohand_fired and (now - self._twohand_last_seen) > 0.25:
+                        self._twohand_start = 0.0
+
+                # Single-hand gestures (first hand only for now)
+                if self._landmarks_list:
+                    lms = self._landmarks_list[0]
+                    # Pinch
+                    if getattr(config, "GESTURE_PINCH_ENABLED", True) and is_pinch(lms, getattr(config, "GESTURE_PINCH_DISTANCE", 0.04)):
+                        if self._hold_gates_pass("SWIPE_UP", now):
+                            self._pending_fire = self._arm_fire("SWIPE_UP", now, via="pinch")
+                            config.tlog("GestureHUD", "PINCH FIRED -> SWIPE_UP")
+                    # Pointing
+                    elif getattr(config, "GESTURE_POINT_ENABLED", True) and is_pointing(lms):
+                        if self._hold_gates_pass("SWIPE_UP", now):
+                            self._pending_fire = self._arm_fire("SWIPE_UP", now, via="point")
+                            config.tlog("GestureHUD", "POINT FIRED -> SWIPE_UP")
+                    # Fist
+                    elif getattr(config, "GESTURE_FIST_ENABLED", True) and is_fist(lms):
+                        if self._hold_gates_pass("SWIPE_DOWN", now):
+                            self._pending_fire = self._arm_fire("SWIPE_DOWN", now, via="fist")
+                            config.tlog("GestureHUD", "FIST FIRED -> SWIPE_DOWN")
 
             result_gesture = evaluate_virtual_screen_sweep(self.history, now)
             if self._pending_fire is not None:  # hold/two-hand fired above (history was cleared)

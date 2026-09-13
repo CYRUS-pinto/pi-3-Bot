@@ -212,6 +212,16 @@ GESTURE_HOLD_SEC       = 0.8      # Dwell time to fire a hold (seconds). No key-
 GESTURE_HOLD_MAX_SPEED = 0.25     # Must be this still to count as holding (a swipe passing through is faster — naturally exclusive)
 GESTURE_TWOHAND_ENABLED = True    # Two-hand command: both hands up/visible together (the deliberate "everybody look" pose)
 GESTURE_TWOHAND_SEC    = 1.0      # How long both hands must be present together to fire (maps to slides overview)
+# ponytail 2026-09-13: MediaPipe Hand Landmarker gestures
+GESTURE_LANDMARKER_ENABLED = True     # Enable MediaPipe Hand Landmarker (optional)
+GESTURE_LANDMARKER_MODEL = "hand_landmarker.task"  # Path to .task model
+GESTURE_PINCH_ENABLED = True          # Pinch gesture (thumb+index)
+GESTURE_PINCH_DISTANCE = 0.04         # Normalized pinch distance threshold
+GESTURE_POINT_ENABLED = True          # Pointing gesture (index extended)
+GESTURE_FIST_ENABLED = True           # Fist gesture
+GESTURE_PINCH_ENABLED = True          # Pinch gesture
+GESTURE_FIST_ENABLED = True           # Fist gesture
+GESTURE_PINCH_DISTANCE = 0.04         # Normalized pinch distance threshold
 # Screen Physical Rotation:
 #   0   : Standard Landscape / Native
 #   90  : Vertical / Portrait (Clockwise)
@@ -247,6 +257,7 @@ def load_calibration():
     global COUCH_DIST_METERS, GAZE_SENSITIVITY_X, GAZE_SENSITIVITY_Y, GAZE_OFFSET_X, GAZE_OFFSET_Y
     global SHOW_CAMERA_PIP, SHOW_DIAGNOSTICS, HUD_ENABLED, GESTURE_SWIPE_ENABLED, GESTURE_SWIPE_SENSITIVITY
     global GESTURE_HOLD_ENABLED, GESTURE_TWOHAND_ENABLED
+    global GESTURE_LANDMARKER_ENABLED, GESTURE_LANDMARKER_MODEL, GESTURE_PINCH_DISTANCE
     global GESTURE_SENS_LEFT, GESTURE_SENS_RIGHT, GESTURE_SENS_UP, GESTURE_SENS_DOWN
     global SCREEN_ROTATION, CAMERA_ROTATION, SHOW_GESTURE_BANNER
     global EVENT_DISPLAY_TIME, AUTO_CYCLE_ENABLED, GESTURE_MODE
@@ -279,6 +290,9 @@ def load_calibration():
             GESTURE_SWIPE_ENABLED = bool(data.get("gesture_swipe_enabled", GESTURE_SWIPE_ENABLED))
             GESTURE_HOLD_ENABLED = bool(data.get("gesture_hold_enabled", GESTURE_HOLD_ENABLED))
             GESTURE_TWOHAND_ENABLED = bool(data.get("gesture_twohand_enabled", GESTURE_TWOHAND_ENABLED))
+            GESTURE_LANDMARKER_ENABLED = bool(data.get("gesture_landmarker_enabled", GESTURE_LANDMARKER_ENABLED))
+            GESTURE_LANDMARKER_MODEL = str(data.get("gesture_landmarker_model", GESTURE_LANDMARKER_MODEL))
+            GESTURE_PINCH_DISTANCE = float(data.get("gesture_pinch_distance", GESTURE_PINCH_DISTANCE))
             GESTURE_SWIPE_SENSITIVITY = float(data.get("gesture_sens", GESTURE_SWIPE_SENSITIVITY))
             GESTURE_SENS_LEFT = float(data.get("sens_left", GESTURE_SENS_LEFT))
             GESTURE_SENS_RIGHT = float(data.get("sens_right", GESTURE_SENS_RIGHT))
@@ -375,6 +389,9 @@ def save_calibration():
         "gesture_swipe_enabled": GESTURE_SWIPE_ENABLED,
         "gesture_hold_enabled": GESTURE_HOLD_ENABLED,
         "gesture_twohand_enabled": GESTURE_TWOHAND_ENABLED,
+        "gesture_landmarker_enabled": GESTURE_LANDMARKER_ENABLED,
+        "gesture_landmarker_model": GESTURE_LANDMARKER_MODEL,
+        "gesture_pinch_distance": GESTURE_PINCH_DISTANCE,
         "gesture_sens": GESTURE_SWIPE_SENSITIVITY,
         "sens_left": GESTURE_SENS_LEFT,
         "sens_right": GESTURE_SENS_RIGHT,

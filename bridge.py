@@ -548,6 +548,17 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
       [2-HAND: ON]
     </button>
   </div>
+  <div class="grid grid-3" style="margin-top:6px;">
+    <button id="btnKindLandmarker" onclick="toggleKind('landmarker')" class="mint" style="padding:10px 4px; font-size:11px;">
+      [LANDMARKER: ON]
+    </button>
+    <button id="btnKindPinch" onclick="toggleKind('pinch')" class="mint" style="padding:10px 4px; font-size:11px;">
+      [PINCH: ON]
+    </button>
+    <button id="btnKindPoint" onclick="toggleKind('point')" class="mint" style="padding:10px 4px; font-size:11px;">
+      [POINT: ON]
+    </button>
+  </div>
   <div style="margin-top:4px;">
     <span style="font-size:9px; color:#555d6e;">KINDS ARE ISOLATED &mdash; OFF MEANS ZERO CROSS-TALK. HOLD = MOST ACCURATE.</span>
   </div>
@@ -1445,7 +1456,14 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     sens_up: 1.0,
     sens_down: 1.0,
     offset_x: 0.0,
-    offset_y: 0.0
+    offset_y: 0.0,
+    // ponytail 2026-09-13: MediaPipe Hand Landmarker gestures
+    gesture_landmarker_enabled: true,
+    gesture_landmarker_model: "hand_landmarker.task",
+    gesture_pinch_enabled: true,
+    gesture_pinch_distance: 0.04,
+    gesture_point_enabled: true,
+    gesture_fist_enabled: true,
   };
 
   function sendCalib() {
@@ -2301,13 +2319,13 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     }).catch(()=>{});
   }
 
-  // ── Per-kind gesture toggles (swipe / hold / 2-hand). Each kind is hard-isolated
-  // server-side; turning one off removes it AND its cross-talk. States sync from
-  // /api/status every poll (see status loop below).
-  let kindSwipe = true, kindHold = true, kindTwohand = true;
-  function paintKindButtons() {
-    const map = [['btnKindSwipe', kindSwipe, 'SWIPE'], ['btnKindHold', kindHold, 'HOLD'], ['btnKindTwohand', kindTwohand, '2-HAND']];
-    for (const [id, on, label] of map) {
+// ── Per-kind gesture toggles (swipe / hold / 2-hand / landmarker / pinch / point).
+// Each kind is hard-isolated server-side; turning one off removes it AND its cross-talk.
+// States sync from /api/status every poll (see status loop below).
+let kindSwipe = true, kindHold = true, kindTwohand = true, kindLandmarker = true, kindPinch = true, kindPoint = true;
+function paintKindButtons() {
+  const map = [['btnKindSwipe', kindSwipe, 'SWIPE'], ['btnKindHold', kindHold, 'HOLD'], ['btnKindTwohand', kindTwohand, '2-HAND'], ['btnKindLandmarker', kindLandmarker, 'LANDMARKER'], ['btnKindPinch', kindPinch, 'PINCH'], ['btnKindPoint', kindPoint, 'POINT']];
+  for (const [id, on, label] of map) {
       const b = document.getElementById(id);
       if (!b) continue;
       b.textContent = '[' + label + ': ' + (on ? 'ON' : 'OFF') + ']';
@@ -2320,15 +2338,18 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     if (navigator.vibrate) navigator.vibrate(30);
     if (which === 'swipe') kindSwipe = !kindSwipe;
     else if (which === 'hold') kindHold = !kindHold;
-    else kindTwohand = !kindTwohand;
+    else if (which === 'twohand') kindTwohand = !kindTwohand;
+    else if (which === 'landmarker') kindLandmarker = !kindLandmarker;
+    else if (which === 'pinch') kindPinch = !kindPinch;
+    else if (which === 'point') kindPoint = !kindPoint;
     paintKindButtons();
     fetch('/api/calibrate', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({swipe_enabled: kindSwipe, hold_enabled: kindHold, twohand_enabled: kindTwohand})
+      body: JSON.stringify({swipe_enabled: kindSwipe, hold_enabled: kindHold, twohand_enabled: kindTwohand, landmarker_enabled: kindLandmarker, pinch_enabled: kindPinch, point_enabled: kindPoint})
     }).then(() => {
       const fs = document.getElementById('footerStatus');
-      if (fs) fs.textContent = 'GESTURE KINDS — SWIPE:' + (kindSwipe ? 'ON' : 'OFF') + ' HOLD:' + (kindHold ? 'ON' : 'OFF') + ' 2-HAND:' + (kindTwohand ? 'ON' : 'OFF');
+      if (fs) fs.textContent = 'GESTURE KINDS — SWIPE:' + (kindSwipe ? 'ON' : 'OFF') + ' HOLD:' + (kindHold ? 'ON' : 'OFF') + ' 2-HAND:' + (kindTwohand ? 'ON' : 'OFF') + ' LM:' + (kindLandmarker ? 'ON' : 'OFF') + ' PINCH:' + (kindPinch ? 'ON' : 'OFF') + ' POINT:' + (kindPoint ? 'ON' : 'OFF');
     }).catch(()=>{});
   }
   function syncKindButtons(cal) {
@@ -2336,6 +2357,9 @@ WEB_REMOTE_HTML = """<!DOCTYPE html>
     if (cal.gesture_swipe_enabled !== undefined) kindSwipe = !!cal.gesture_swipe_enabled;
     if (cal.gesture_hold_enabled !== undefined) kindHold = !!cal.gesture_hold_enabled;
     if (cal.gesture_twohand_enabled !== undefined) kindTwohand = !!cal.gesture_twohand_enabled;
+    if (cal.gesture_landmarker_enabled !== undefined) kindLandmarker = !!cal.gesture_landmarker_enabled;
+    if (cal.gesture_pinch_enabled !== undefined) kindPinch = !!cal.gesture_pinch_enabled;
+    if (cal.gesture_point_enabled !== undefined) kindPoint = !!cal.gesture_point_enabled;
     paintKindButtons();
   }
 
@@ -3072,6 +3096,8 @@ class WebRemoteHandler(BaseHTTPRequestHandler):
                     "gesture_swipe_enabled": getattr(config, "GESTURE_SWIPE_ENABLED", True),
                     "gesture_hold_enabled": getattr(config, "GESTURE_HOLD_ENABLED", True),
                     "gesture_twohand_enabled": getattr(config, "GESTURE_TWOHAND_ENABLED", True),
+                    "gesture_landmarker_enabled": getattr(config, "GESTURE_LANDMARKER_ENABLED", True),
+                    "gesture_landmarker_model": getattr(config, "GESTURE_LANDMARKER_MODEL", "hand_landmarker.task"),
                     "gesture_mode": getattr(config, "GESTURE_MODE", "HORIZONTAL_SWIPE"),
                     "gesture_cooldown": getattr(config, "GESTURE_COOLDOWN_SEC", 1.00),
                     "swipe_anim_enabled": getattr(config, "SWIPE_ANIMATION_ENABLED", True),
